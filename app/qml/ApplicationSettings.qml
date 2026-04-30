@@ -154,6 +154,52 @@ QtObject {
 
     property Storage storage: Storage {}
 
+    // Settings schema — single source of truth for serialisation.
+    // k = JSON key, p = QML property name (may differ for private _ properties)
+    // scope: "settings" = general/window prefs; "profile" = CRT visual profile
+    // To add a setting: declare the property above, then add one line here.
+    readonly property var _settingsSchema: [
+        { k: "effectsFrameSkip",  p: "effectsFrameSkip",  scope: "settings" },
+        { k: "windowScaling",     p: "windowScaling",     scope: "settings" },
+        { k: "showTerminalSize",  p: "showTerminalSize",  scope: "settings" },
+        { k: "fontScaling",       p: "fontScaling",       scope: "settings" },
+        { k: "showMenubar",       p: "showMenubar",       scope: "settings" },
+        { k: "bloomQuality",      p: "bloomQuality",      scope: "settings" },
+        { k: "burnInQuality",     p: "burnInQuality",     scope: "settings" },
+        { k: "useCustomCommand",  p: "useCustomCommand",  scope: "settings" },
+        { k: "customCommand",     p: "customCommand",     scope: "settings" },
+        { k: "windowCurvature",   p: "windowCurvature",  scope: "settings" },
+        { k: "tabBarScale",       p: "tabBarScale",       scope: "settings" },
+        { k: "backgroundColor",   p: "_backgroundColor",  scope: "profile"  },
+        { k: "fontColor",         p: "_fontColor",        scope: "profile"  },
+        { k: "flickering",        p: "flickering",        scope: "profile"  },
+        { k: "horizontalSync",    p: "horizontalSync",    scope: "profile"  },
+        { k: "staticNoise",       p: "staticNoise",       scope: "profile"  },
+        { k: "chromaColor",       p: "chromaColor",       scope: "profile"  },
+        { k: "saturationColor",   p: "saturationColor",   scope: "profile"  },
+        { k: "screenCurvature",   p: "screenCurvature",   scope: "profile"  },
+        { k: "glowingLine",       p: "glowingLine",       scope: "profile"  },
+        { k: "burnIn",            p: "burnIn",            scope: "profile"  },
+        { k: "bloom",             p: "bloom",             scope: "profile"  },
+        { k: "rasterization",     p: "rasterization",     scope: "profile"  },
+        { k: "jitter",            p: "jitter",            scope: "profile"  },
+        { k: "rgbShift",          p: "rgbShift",          scope: "profile"  },
+        { k: "brightness",        p: "brightness",        scope: "profile"  },
+        { k: "contrast",          p: "contrast",          scope: "profile"  },
+        { k: "ambientLight",      p: "ambientLight",      scope: "profile"  },
+        { k: "windowOpacity",     p: "windowOpacity",     scope: "profile"  },
+        { k: "fontName",          p: "fontName",          scope: "profile"  },
+        { k: "fontSource",        p: "fontSource",        scope: "profile"  },
+        { k: "fontWidth",         p: "fontWidth",         scope: "profile"  },
+        { k: "lineSpacing",       p: "lineSpacing",       scope: "profile"  },
+        { k: "margin",            p: "_margin",           scope: "profile"  },
+        { k: "blinkingCursor",    p: "blinkingCursor",    scope: "profile"  },
+        { k: "frameSize",         p: "_frameSize",        scope: "profile"  },
+        { k: "screenRadius",      p: "_screenRadius",     scope: "profile"  },
+        { k: "frameColor",        p: "_frameColor",       scope: "profile"  },
+        { k: "frameShininess",    p: "_frameShininess",   scope: "profile"  }
+    ]
+
     function stringify(obj) {
         var replacer = function (key, val) {
             return val.toFixed ? Number(val.toFixed(4)) : val
@@ -161,72 +207,33 @@ QtObject {
         return JSON.stringify(obj, replacer, 2)
     }
 
-    function composeSettingsString() {
-        var settings = {
-            "effectsFrameSkip": effectsFrameSkip,
-            "windowScaling": windowScaling,
-            "showTerminalSize": showTerminalSize,
-            "fontScaling": fontScaling,
-            "showMenubar": showMenubar,
-            "bloomQuality": bloomQuality,
-            "burnInQuality": burnInQuality,
-            "useCustomCommand": useCustomCommand,
-            "customCommand": customCommand,
-            "windowCurvature": windowCurvature,
-            "tabBarScale": tabBarScale
+    function _schemaCompose(scope) {
+        var obj = {}
+        for (var i = 0; i < _settingsSchema.length; i++) {
+            var e = _settingsSchema[i]
+            if (e.scope === scope) obj[e.k] = this[e.p]
         }
-        return stringify(settings)
+        return obj
     }
 
-    function composeProfileObject() {
-        var profile = {
-            "backgroundColor": _backgroundColor,
-            "fontColor": _fontColor,
-            "flickering": flickering,
-            "horizontalSync": horizontalSync,
-            "staticNoise": staticNoise,
-            "chromaColor": chromaColor,
-            "saturationColor": saturationColor,
-            "screenCurvature": screenCurvature,
-            "glowingLine": glowingLine,
-            "burnIn": burnIn,
-            "bloom": bloom,
-            "rasterization": rasterization,
-            "jitter": jitter,
-            "rgbShift": rgbShift,
-            "brightness": brightness,
-            "contrast": contrast,
-            "ambientLight": ambientLight,
-            "windowOpacity": windowOpacity,
-            "fontName": fontName,
-            "fontSource": fontSource,
-            "fontWidth": fontWidth,
-            "margin": _margin,
-            "blinkingCursor": blinkingCursor,
-            "frameSize": _frameSize,
-            "screenRadius": _screenRadius,
-            "frameColor": _frameColor,
-            "frameShininess": _frameShininess
+    function _schemaLoad(obj, scope) {
+        for (var i = 0; i < _settingsSchema.length; i++) {
+            var e = _settingsSchema[i]
+            if (e.scope === scope && obj[e.k] !== undefined)
+                this[e.p] = obj[e.k]
         }
-        return profile
     }
 
-    function composeProfileString() {
-        return stringify(composeProfileObject())
-    }
+    function composeSettingsString() { return stringify(_schemaCompose("settings")) }
+    function composeProfileObject()  { return _schemaCompose("profile") }
+    function composeProfileString()  { return stringify(composeProfileObject()) }
 
     function loadSettings() {
         var settingsString = storage.getSetting("_CURRENT_SETTINGS")
         var profileString = storage.getSetting("_CURRENT_PROFILE")
-
-        if (!settingsString)
-            return
-        if (!profileString)
-            return
-
+        if (!settingsString || !profileString) return
         loadSettingsString(settingsString)
         loadProfileString(profileString)
-
         if (verbose)
             console.log("Loading settings: " + settingsString + profileString)
     }
@@ -234,10 +241,8 @@ QtObject {
     function storeSettings() {
         var settingsString = composeSettingsString()
         var profileString = composeProfileString()
-
         storage.setSetting("_CURRENT_SETTINGS", settingsString)
         storage.setSetting("_CURRENT_PROFILE", profileString)
-
         if (verbose) {
             console.log("Storing settings: " + settingsString)
             console.log("Storing profile: " + profileString)
@@ -245,77 +250,11 @@ QtObject {
     }
 
     function loadSettingsString(settingsString) {
-        var settings = JSON.parse(settingsString)
-
-        showTerminalSize = settings.showTerminalSize
-                !== undefined ? settings.showTerminalSize : showTerminalSize
-
-        effectsFrameSkip = settings.effectsFrameSkip !== undefined ? settings.effectsFrameSkip : effectsFrameSkip
-        windowScaling = settings.windowScaling
-                !== undefined ? settings.windowScaling : windowScaling
-
-        fontScaling = settings.fontScaling !== undefined ? settings.fontScaling : fontScaling
-
-        showMenubar = settings.showMenubar !== undefined ? settings.showMenubar : showMenubar
-
-        bloomQuality = settings.bloomQuality !== undefined ? settings.bloomQuality : bloomQuality
-        burnInQuality = settings.burnInQuality
-                !== undefined ? settings.burnInQuality : burnInQuality
-
-        useCustomCommand = settings.useCustomCommand
-                !== undefined ? settings.useCustomCommand : useCustomCommand
-        customCommand = settings.customCommand
-                !== undefined ? settings.customCommand : customCommand
-        windowCurvature = settings.windowCurvature !== undefined ? settings.windowCurvature : windowCurvature
-        tabBarScale = settings.tabBarScale !== undefined ? settings.tabBarScale : tabBarScale
+        _schemaLoad(JSON.parse(settingsString), "settings")
     }
 
     function loadProfileString(profileString) {
-        var settings = JSON.parse(profileString)
-
-        _backgroundColor = settings.backgroundColor
-                !== undefined ? settings.backgroundColor : _backgroundColor
-        _fontColor = settings.fontColor !== undefined ? settings.fontColor : _fontColor
-
-        horizontalSync = settings.horizontalSync
-                !== undefined ? settings.horizontalSync : horizontalSync
-        flickering = settings.flickering !== undefined ? settings.flickering : flickering
-        staticNoise = settings.staticNoise !== undefined ? settings.staticNoise : staticNoise
-        chromaColor = settings.chromaColor !== undefined ? settings.chromaColor : chromaColor
-        saturationColor = settings.saturationColor
-                !== undefined ? settings.saturationColor : saturationColor
-        screenCurvature = settings.screenCurvature
-                !== undefined ? settings.screenCurvature : screenCurvature
-        glowingLine = settings.glowingLine !== undefined ? settings.glowingLine : glowingLine
-
-        burnIn = settings.burnIn !== undefined ? settings.burnIn : burnIn
-        bloom = settings.bloom !== undefined ? settings.bloom : bloom
-
-        rasterization = settings.rasterization
-                !== undefined ? settings.rasterization : rasterization
-
-        jitter = settings.jitter !== undefined ? settings.jitter : jitter
-
-        rgbShift = settings.rgbShift !== undefined ? settings.rgbShift : rgbShift
-
-        ambientLight = settings.ambientLight !== undefined ? settings.ambientLight : ambientLight
-        contrast = settings.contrast !== undefined ? settings.contrast : contrast
-        brightness = settings.brightness !== undefined ? settings.brightness : brightness
-        windowOpacity = settings.windowOpacity
-                !== undefined ? settings.windowOpacity : windowOpacity
-
-        fontName = settings.fontName !== undefined ? settings.fontName : fontName
-        fontSource = settings.fontSource !== undefined ? settings.fontSource : fontSource
-        fontWidth = settings.fontWidth !== undefined ? settings.fontWidth : fontWidth
-        lineSpacing = settings.lineSpacing !== undefined ? settings.lineSpacing : lineSpacing
-
-        _margin = settings.margin !== undefined ? settings.margin : _margin
-        _frameSize = settings.frameSize !== undefined ? settings.frameSize : _frameSize
-        _screenRadius = settings.screenRadius !== undefined ? settings.screenRadius : _screenRadius
-        _frameColor = settings.frameColor !== undefined ? settings.frameColor : _frameColor
-        _frameShininess = settings.frameShininess !== undefined ? settings.frameShininess : _frameShininess
-
-        blinkingCursor = settings.blinkingCursor !== undefined ? settings.blinkingCursor : blinkingCursor
+        _schemaLoad(JSON.parse(profileString), "profile")
     }
 
     function storeCustomProfiles() {
