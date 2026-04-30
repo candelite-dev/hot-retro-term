@@ -109,7 +109,7 @@ Item {
             sourceItem: noiseTexture
             wrapMode: ShaderEffectSource.Repeat
             visible: false
-            smooth: true
+            smooth: false
         }
 
         vertexShader: "qrc:/shaders/terminal_dynamic.vert.qsb"

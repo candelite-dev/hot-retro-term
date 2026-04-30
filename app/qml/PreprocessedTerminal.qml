@@ -417,9 +417,12 @@ Item{
     ShaderEffectSource{
         id: kterminalSource
         sourceItem: kterminal
-        hideSource: true
+        // In split mode the per-pane CRT and burn-in are disabled, so kterminal can render
+        // directly into crtContent without an FBO — eliminates N per-pane FBO captures.
+        hideSource: !terminalContainer.splitActive
+        live: !terminalContainer.splitActive
         wrapMode: ShaderEffectSource.Repeat
-        visible: terminalContainer.splitActive
+        visible: false
         anchors.fill: parent
         textureSize: Qt.size(kterminal.totalWidth * scaleTexture, kterminal.totalHeight * scaleTexture)
         sourceRect: Qt.rect(-kterminal.margin, -kterminal.margin, kterminal.totalWidth, kterminal.totalHeight)

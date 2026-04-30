@@ -3,6 +3,7 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QFontMetricsF>
+#include <QThreadPool>
 #include <QtGlobal>
 #include <QtMath>
 
@@ -18,26 +19,43 @@ FontManager::FontManager(QObject *parent)
     , m_filteredFontListModel(this)
 {
     populateBundledFonts();
-    populateSystemFonts();
     m_fontListModel.setFonts(m_allFonts);
     updateFilteredFonts();
     updateComputedFont();
+
+    // Enumerate system fonts off the startup path — QFontDatabase::families() can be slow
+    // (100ms+ on macOS). Bundled fonts are already available; system fonts appear shortly after.
+    QThreadPool::globalInstance()->start([this]() {
+        QStringList families = retrieveMonospaceFonts();
+        QMetaObject::invokeMethod(this, [this, families]() {
+            for (const QString &family : families) {
+                if (m_bundledFamilies.contains(family))
+                    continue;
+                FontEntry entry;
+                entry.name = family;
+                entry.text = family;
+                entry.source = QString();
+                entry.baseWidth = 1.0;
+                entry.pixelSize = kSystemFontPixelSize;
+                entry.lowResolutionFont = false;
+                entry.isSystemFont = true;
+                entry.family = family;
+                m_allFonts.append(entry);
+            }
+            m_fontListModel.setFonts(m_allFonts);
+            updateFilteredFonts();
+            emit systemFontsReady();
+        }, Qt::QueuedConnection);
+    });
 }
 
 QStringList FontManager::retrieveMonospaceFonts()
 {
     QStringList result;
-
-    QFontDatabase fontDatabase;
-    const QStringList fontFamilies = fontDatabase.families();
-
-    for (const QString &fontFamily : fontFamilies) {
-        QFont font(fontFamily);
-        if (fontDatabase.isFixedPitch(font.family())) {
-            result.append(fontFamily);
-        }
+    for (const QString &family : QFontDatabase::families()) {
+        if (QFontDatabase::isFixedPitch(family))
+            result.append(family);
     }
-
     return result;
 }
 
@@ -401,26 +419,6 @@ void FontManager::addBundledFont(const QString &name,
         ? computeBaseWidth(entry.family, pixelSize, baseWidth)
         : baseWidth;
     m_allFonts.append(entry);
-}
-
-void FontManager::populateSystemFonts()
-{
-    const QStringList families = retrieveMonospaceFonts();
-    for (const QString &family : families) {
-        if (m_bundledFamilies.contains(family)) {
-            continue;
-        }
-        FontEntry entry;
-        entry.name = family;
-        entry.text = family;
-        entry.source = QString();
-        entry.baseWidth = 1.0;
-        entry.pixelSize = kSystemFontPixelSize;
-        entry.lowResolutionFont = false;
-        entry.isSystemFont = true;
-        entry.family = family;
-        m_allFonts.append(entry);
-    }
 }
 
 void FontManager::updateFilteredFonts()

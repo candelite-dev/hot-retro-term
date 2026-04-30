@@ -15,6 +15,11 @@ if(NOT APP_VERSION)
     set(APP_VERSION "unknown")
 endif()
 
+# Compress QRC resources — TTF fonts compress ~60%; shaves 90+ MB off qrc_resources.cpp
+set_source_files_properties(qml/resources.qrc PROPERTIES
+    AUTORCC_OPTIONS "-compress;9;-threshold;0"
+)
+
 # --- Executable ---
 qt_add_executable(cool-retro-term
     main.cpp

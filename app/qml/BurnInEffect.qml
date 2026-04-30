@@ -73,7 +73,7 @@ Loader {
             wrapMode: ShaderEffectSource.ClampToEdge
 
             format: ShaderEffectSource.RGBA
-            smooth: true
+            smooth: false
 
             visible: false
 

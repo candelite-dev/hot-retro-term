@@ -685,6 +685,28 @@ Item {
                 // Drag-to-resize state
                 property var _resizingBoundary: null
 
+                // Bounds cache — invalidated by tree identity change (split/close creates new objects)
+                property var _cachedBoundsTree: undefined
+                property var _cachedBounds: null
+                property var _cachedBoundariesTree: undefined
+                property var _cachedBoundaries: null
+
+                function _getOrComputeBounds(tree) {
+                    if (tree !== _cachedBoundsTree) {
+                        _cachedBoundsTree = tree
+                        _cachedBounds = computePaneBounds(tree, 0, 0, 1, 1)
+                    }
+                    return _cachedBounds
+                }
+
+                function _getOrComputeBoundaries(tree) {
+                    if (tree !== _cachedBoundariesTree) {
+                        _cachedBoundariesTree = tree
+                        _cachedBoundaries = computeSplitBoundaries(tree, 0, 0, 1, 1)
+                    }
+                    return _cachedBoundaries
+                }
+
                 cursorShape: _resizingBoundary
                     ? (_resizingBoundary.orientation === Qt.Horizontal ? Qt.SplitHCursor : Qt.SplitVCursor)
                     : Qt.IBeamCursor
@@ -694,7 +716,7 @@ Item {
                 function _getBounds(paneId) {
                     var tree = splitTrees[currentIndex]
                     if (!tree) return null
-                    var bounds = computePaneBounds(tree, 0, 0, 1, 1)
+                    var bounds = _getOrComputeBounds(tree)
                     for (var i = 0; i < bounds.length; i++) {
                         if (bounds[i].paneId === paneId) return bounds[i]
                     }
@@ -711,7 +733,7 @@ Item {
                     if (relY < top) return null
                     var tree = splitTrees[currentIndex]
                     if (!tree) return null
-                    var bounds = computePaneBounds(tree, 0, 0, 1, 1)
+                    var bounds = _getOrComputeBounds(tree)
                     var stackH = height - top
                     var nx = relX / width
                     var ny = (relY - top) / stackH
@@ -729,7 +751,7 @@ Item {
                     if (my < top) return null
                     var tree = splitTrees[currentIndex]
                     if (!tree) return null
-                    var boundaries = computeSplitBoundaries(tree, 0, 0, 1, 1)
+                    var boundaries = _getOrComputeBoundaries(tree)
                     var stackH = height - top
                     var nx = mx / width
                     var ny = (my - top) / stackH
