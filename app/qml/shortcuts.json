@@ -1,0 +1,16 @@
+{
+  "newWindow":      { "mac": "Meta+N",          "default": "Ctrl+Shift+N" },
+  "quit":           { "mac": "Meta+Q",           "default": "Ctrl+Shift+Q" },
+  "copy":           { "mac": "Ctrl+C",           "default": "Ctrl+Shift+C" },
+  "paste":          { "mac": "Ctrl+V",           "default": "Ctrl+Shift+V" },
+  "newTab":         { "mac": "Meta+T",           "default": "Ctrl+Shift+T" },
+  "closeTab":       { "mac": "Meta+W",           "default": "Ctrl+Shift+W" },
+  "commandPalette": { "mac": "Meta+Shift+P",     "default": "Ctrl+Shift+P" },
+  "splitRight":     { "mac": "Meta+D",           "default": "Ctrl+Shift+D" },
+  "splitDown":      { "mac": "Meta+Shift+E",     "default": "Ctrl+Shift+E" },
+  "focusLeft":      { "mac": "Meta+Shift+Left",  "default": "Ctrl+Shift+Left" },
+  "focusRight":     { "mac": "Meta+Shift+Right", "default": "Ctrl+Shift+Right" },
+  "focusUp":        { "mac": "Meta+Shift+Up",    "default": "Ctrl+Shift+Up" },
+  "focusDown":      { "mac": "Meta+Shift+Down",  "default": "Ctrl+Shift+Down" },
+  "switchTab":      { "mac": "Meta+{n}",         "default": "Alt+{n}" }
+}

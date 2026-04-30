@@ -4,6 +4,13 @@ FileIO::FileIO()
 {
 }
 
+QString FileIO::userShortcutsPath()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    if (dir.isEmpty()) return QString();
+    return dir + QStringLiteral("/shortcuts.json");
+}
+
 bool FileIO::write(const QString& sourceUrl, const QString& data) {
     if (sourceUrl.isEmpty())
         return false;

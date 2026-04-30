@@ -29,11 +29,6 @@ ApplicationWindow {
     width: 1024
     height: 768
 
-    // Show the window once it is ready.
-    Component.onCompleted: {
-        visible = true
-    }
-
     minimumWidth: 320
     minimumHeight: 240
 
@@ -50,6 +45,68 @@ ApplicationWindow {
 
     title: terminalTabs.currentTitle
 
+    // Keyboard shortcut bindings — loaded from shortcuts.json at startup.
+    // To rebind: copy shortcuts.json to ~/.config/cool-retro-term/shortcuts.json
+    // and edit; the user file is merged over the bundled defaults at startup.
+    property var _sc: ({})
+
+    function _loadShortcuts() {
+        var mac = Qt.platform.os === "osx"
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "qrc:/shortcuts.json", false)
+        xhr.send()
+        var raw = JSON.parse(xhr.responseText)
+
+        // Optional user override — gracefully ignored if absent
+        var userPath = fileio.userShortcutsPath()
+        if (userPath !== "") {
+            try {
+                var userFile = fileio.read(userPath)
+                if (userFile !== "") {
+                    var userRaw = JSON.parse(userFile)
+                    for (var uk in userRaw) raw[uk] = userRaw[uk]
+                }
+            } catch(e) { console.log("shortcuts override parse error:", e) }
+        }
+
+        var result = {}
+        for (var key in raw) {
+            var entry = raw[key]
+            result[key] = mac ? entry.mac : entry["default"]
+        }
+        _sc = result
+    }
+
+    Component.onCompleted: {
+        _loadShortcuts()
+
+        // Apply to Action objects
+        newWindowAction.shortcut      = _sc.newWindow      || ""
+        quitAction.shortcut           = _sc.quit           || ""
+        copyAction.shortcut           = _sc.copy           || ""
+        pasteAction.shortcut          = _sc.paste          || ""
+        newTabAction.shortcut         = _sc.newTab         || ""
+        closeTabAction.shortcut       = _sc.closeTab       || ""
+        commandPaletteAction.shortcut = _sc.commandPalette || ""
+        splitVerticalAction.shortcut  = _sc.splitRight     || ""
+        splitHorizontalAction.shortcut= _sc.splitDown      || ""
+
+        // Apply to directional focus Shortcuts
+        focusLeft.sequence  = _sc.focusLeft  || ""
+        focusRight.sequence = _sc.focusRight || ""
+        focusUp.sequence    = _sc.focusUp    || ""
+        focusDown.sequence  = _sc.focusDown  || ""
+
+        // Apply tab-switch shortcuts (1-9)
+        var template = _sc.switchTab || ""
+        for (var i = 0; i < tabShortcuts.count; i++) {
+            var s = tabShortcuts.objectAt(i)
+            if (s) s.sequence = template.replace("{n}", String(i + 1))
+        }
+
+        visible = true
+    }
+
     Action {
         id: fullscreenAction
         text: qsTr("Fullscreen")
@@ -62,13 +119,10 @@ ApplicationWindow {
     Action {
         id: newWindowAction
         text: qsTr("New Window")
-        shortcut: appSettings.isMacOS ? "Meta+N" : "Ctrl+Shift+N"
-        onTriggered: appRoot.createWindow()
     }
     Action {
         id: quitAction
         text: qsTr("Quit")
-        shortcut: appSettings.isMacOS ? StandardKey.Close : "Ctrl+Shift+Q"
         onTriggered: terminalWindow.close()
     }
     Action {
@@ -83,12 +137,10 @@ ApplicationWindow {
     Action {
         id: copyAction
         text: qsTr("Copy")
-        shortcut: appSettings.isMacOS ? StandardKey.Copy : "Ctrl+Shift+C"
     }
     Action {
         id: pasteAction
         text: qsTr("Paste")
-        shortcut: appSettings.isMacOS ? StandardKey.Paste : "Ctrl+Shift+V"
     }
     Action {
         id: zoomIn
@@ -114,93 +166,43 @@ ApplicationWindow {
     Action {
         id: newTabAction
         text: qsTr("New Tab")
-        shortcut: appSettings.isMacOS ? "Meta+T" : "Ctrl+Shift+T"
         onTriggered: terminalTabs.addTab()
     }
     Action {
         id: closeTabAction
         text: qsTr("Close Tab")
-        shortcut: appSettings.isMacOS ? "Meta+W" : "Ctrl+Shift+W"
         onTriggered: terminalTabs.closePane(terminalTabs.focusedPaneId)
     }
     Action {
         id: commandPaletteAction
         text: qsTr("Command Palette")
-        shortcut: appSettings.isMacOS ? "Meta+Shift+P" : "Ctrl+Shift+P"
     }
     Action {
         id: splitVerticalAction
         text: qsTr("Split Right")
-        shortcut: appSettings.isMacOS ? "Meta+D" : "Ctrl+Shift+D"
         onTriggered: terminalTabs.splitPane(Qt.Horizontal)
     }
     Action {
         id: splitHorizontalAction
         text: qsTr("Split Down")
-        shortcut: appSettings.isMacOS ? "Meta+Shift+E" : "Ctrl+Shift+E"
         onTriggered: terminalTabs.splitPane(Qt.Vertical)
     }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+Shift+Left"  : "Ctrl+Shift+Left"
-        onActivated: terminalTabs.moveFocus("left")
+
+    Shortcut { id: focusLeft;  context: Qt.WindowShortcut; onActivated: terminalTabs.moveFocus("left") }
+    Shortcut { id: focusRight; context: Qt.WindowShortcut; onActivated: terminalTabs.moveFocus("right") }
+    Shortcut { id: focusUp;    context: Qt.WindowShortcut; onActivated: terminalTabs.moveFocus("up") }
+    Shortcut { id: focusDown;  context: Qt.WindowShortcut; onActivated: terminalTabs.moveFocus("down") }
+
+    // Tab-switching shortcuts 1-9, sequences set in Component.onCompleted
+    Instantiator {
+        id: tabShortcuts
+        model: 9
+        delegate: Shortcut {
+            context: Qt.WindowShortcut
+            onActivated: if (terminalTabs.count > index) terminalTabs.currentIndex = index
+        }
     }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+Shift+Right" : "Ctrl+Shift+Right"
-        onActivated: terminalTabs.moveFocus("right")
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+Shift+Up"    : "Ctrl+Shift+Up"
-        onActivated: terminalTabs.moveFocus("up")
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+Shift+Down"  : "Ctrl+Shift+Down"
-        onActivated: terminalTabs.moveFocus("down")
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+1" : "Alt+1"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 0) terminalTabs.currentIndex = 0
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+2" : "Alt+2"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 1) terminalTabs.currentIndex = 1
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+3" : "Alt+3"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 2) terminalTabs.currentIndex = 2
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+4" : "Alt+4"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 3) terminalTabs.currentIndex = 3
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+5" : "Alt+5"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 4) terminalTabs.currentIndex = 4
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+6" : "Alt+6"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 5) terminalTabs.currentIndex = 5
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+7" : "Alt+7"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 6) terminalTabs.currentIndex = 6
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+8" : "Alt+8"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 7) terminalTabs.currentIndex = 7
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+9" : "Alt+9"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 8) terminalTabs.currentIndex = 8
-    }
+
     TerminalTabs {
         id: terminalTabs
         width: parent.width
