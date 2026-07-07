@@ -122,17 +122,23 @@ Item{
         id: kterminal
 
         property int textureResolutionScale: appSettings.lowResolutionFont ? Screen.devicePixelRatio : 1
-        property int margin: appSettings.margin / screenScaling
-        property int totalWidth: Math.floor(parent.width / (screenScaling * fontWidth))
+        property int margin: terminalContainer.splitActive ? 0 : appSettings.margin / screenScaling
+        property int totalWidth: Math.floor(parent.width / screenScaling)
         property int totalHeight: Math.floor(parent.height / screenScaling)
+        property bool sessionStarted: false
 
-        property int rawWidth: totalWidth - 2 * margin
-        property int rawHeight: totalHeight - 2 * margin
+        property int rawWidth: Math.max(1, totalWidth - 2 * margin)
+        property int rawHeight: Math.max(1, totalHeight - 2 * margin)
 
         textureSize: Qt.size(width / textureResolutionScale, height / textureResolutionScale)
 
         width: ensureMultiple(rawWidth, Screen.devicePixelRatio)
         height: ensureMultiple(rawHeight, Screen.devicePixelRatio)
+
+        // In split mode kterminal renders directly (no FBO stretch pass), but the item
+        // is sized at 1/screenScaling — scale it back up to fill the pane.
+        transformOrigin: Item.TopLeft
+        scale: terminalContainer.splitActive ? screenScaling : 1
 
         /** Ensure size is a multiple of factor. This is needed for pixel perfect scaling on highdpi screens. */
         function ensureMultiple(size, factor) {
@@ -303,6 +309,9 @@ Item{
             }
         }
 
+        onWidthChanged: maybeStartSession()
+        onHeightChanged: maybeStartSession()
+
         function startSession() {
             // Retrieve the variable set in main.cpp if arguments are passed.
             if (defaultCmd) {
@@ -323,10 +332,18 @@ Item{
             ksession.startShellProgram();
             forceActiveFocus();
         }
+
+        function maybeStartSession() {
+            if (sessionStarted || width <= 0 || height <= 0)
+                return
+            sessionStarted = true
+            startSession()
+        }
+
         Component.onCompleted: {
             appSettings.fontManager.terminalFontChanged.connect(handleFontChanged);
             appSettings.fontManager.emitCurrentFont();
-            startSession();
+            maybeStartSession();
         }
         Component.onDestruction: {
             appSettings.fontManager.terminalFontChanged.disconnect(handleFontChanged);
@@ -350,7 +367,7 @@ Item{
     property alias contextmenu: menuLoader.item
 
     MouseArea {
-        property real margin: appSettings.margin
+        property real margin: terminalContainer.splitActive ? 0 : appSettings.margin
         property real frameSize: appSettings.frameSize * terminalWindow.normalizedWindowScale
 
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton

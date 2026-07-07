@@ -45,66 +45,35 @@ Item {
     }
     readonly property var secondData: data_ ? data_.second : null
 
-    // Horizontal split (left | right)
-    Row {
-        visible: isHorizontal
-        anchors.fill: parent
-
-        Loader {
-            id: hFirst
-            active: isHorizontal
-            width:  parent.width * ratio
-            height: parent.height
-            source: container.firstData ? "PaneTreeNode.qml" : ""
-            onLoaded: {
-                item.anchors.fill = hFirst
-                item.treeData = Qt.binding(function() { return container.firstData })
-                item.splitManager = Qt.binding(function() { return container.mgr })
-            }
-        }
-        Loader {
-            id: hSecond
-            active: isHorizontal
-            width:  parent.width * (1 - ratio)
-            height: parent.height
-            source: container.secondData ? "PaneTreeNode.qml" : ""
-            onLoaded: {
-                item.anchors.fill = hSecond
-                item.treeData = Qt.binding(function() { return container.secondData })
-                item.splitManager = Qt.binding(function() { return container.mgr })
-            }
-        }
+    function bindLoadedNode(loader, dataProvider) {
+        if (!loader.item)
+            return
+        loader.item.x = 0
+        loader.item.y = 0
+        loader.item.width = Qt.binding(function() { return loader.width })
+        loader.item.height = Qt.binding(function() { return loader.height })
+        loader.item.treeData = Qt.binding(dataProvider)
+        loader.item.splitManager = Qt.binding(function() { return container.mgr })
     }
 
-    // Vertical split (top / bottom)
-    Column {
-        visible: !isHorizontal
-        anchors.fill: parent
+    Loader {
+        id: firstLoader
+        x: 0
+        y: 0
+        width:  container.isHorizontal ? container.width * container.ratio : container.width
+        height: container.isHorizontal ? container.height : container.height * container.ratio
+        source: container.firstData ? "PaneTreeNode.qml" : ""
+        onLoaded: container.bindLoadedNode(firstLoader, function() { return container.firstData })
+    }
 
-        Loader {
-            id: vFirst
-            active: !isHorizontal
-            width:  parent.width
-            height: parent.height * ratio
-            source: container.firstData ? "PaneTreeNode.qml" : ""
-            onLoaded: {
-                item.anchors.fill = vFirst
-                item.treeData = Qt.binding(function() { return container.firstData })
-                item.splitManager = Qt.binding(function() { return container.mgr })
-            }
-        }
-        Loader {
-            id: vSecond
-            active: !isHorizontal
-            width:  parent.width
-            height: parent.height * (1 - ratio)
-            source: container.secondData ? "PaneTreeNode.qml" : ""
-            onLoaded: {
-                item.anchors.fill = vSecond
-                item.treeData = Qt.binding(function() { return container.secondData })
-                item.splitManager = Qt.binding(function() { return container.mgr })
-            }
-        }
+    Loader {
+        id: secondLoader
+        x: container.isHorizontal ? firstLoader.width : 0
+        y: container.isHorizontal ? 0 : firstLoader.height
+        width:  container.isHorizontal ? container.width - firstLoader.width : container.width
+        height: container.isHorizontal ? container.height : container.height - firstLoader.height
+        source: container.secondData ? "PaneTreeNode.qml" : ""
+        onLoaded: container.bindLoadedNode(secondLoader, function() { return container.secondData })
     }
 
     // Invisible drag handle at the split boundary for resize

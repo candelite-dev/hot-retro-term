@@ -31,7 +31,16 @@ QString FileIO::read(const QString& sourceUrl) {
         return "";
 
     QUrl url(sourceUrl);
-    QFile file(url.toLocalFile());
+    QString filePath;
+    if (url.scheme() == QStringLiteral("qrc")) {
+        filePath = QStringLiteral(":") + url.path();
+    } else if (url.isLocalFile()) {
+        filePath = url.toLocalFile();
+    } else {
+        filePath = sourceUrl;
+    }
+
+    QFile file(filePath);
     if (!file.open(QFile::ReadOnly))
         return "";
 

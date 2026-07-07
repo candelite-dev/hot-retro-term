@@ -47,6 +47,10 @@ Item {
 
         property int _paneId: (!node.isSplit && node.treeData) ? node.treeData.paneId : -1
         property var _claimedTerminal: null
+        property bool _claimPending: false
+
+        onWidthChanged: if (_claimPending) _attemptClaim()
+        onHeightChanged: if (_claimPending) _attemptClaim()
 
         onVisibleChanged: {
             if (visible) _attemptClaim()
@@ -64,6 +68,10 @@ Item {
             if (!visible) { console.log("PaneTreeNode._attemptClaim: skip !visible paneId=" + _paneId); return }
             if (_paneId < 0) { console.log("PaneTreeNode._attemptClaim: skip paneId<0"); return }
             if (!node.splitManager) { console.log("PaneTreeNode._attemptClaim: skip !splitManager paneId=" + _paneId); return }
+            if (terminalSlot.width <= 0 || terminalSlot.height <= 0) {
+                _claimPending = true
+                return
+            }
             _claim()
         }
 
@@ -73,6 +81,7 @@ Item {
             if (!t) { console.warn("PaneTreeNode: getTerminal returned null for paneId", _paneId); return }
             console.log("PaneTreeNode._claim(): paneId=" + _paneId,
                         "slotSize=" + terminalSlot.width + "x" + terminalSlot.height)
+            _claimPending = false
             _claimedTerminal = t
             t.parent = terminalSlot
             t.x = 0
@@ -96,6 +105,8 @@ Item {
             if (!_claimedTerminal) return
             var t = _claimedTerminal
             _claimedTerminal = null
+            _claimPending = false
+            // 他の slot が既に claim していた場合はプールに戻さない
             if (t.parent !== terminalSlot) return
             t.visible = false
             t.parent = node.splitManager.terminalPool
@@ -114,6 +125,8 @@ Item {
             t.isSplitLayout = Qt.binding(function() {
                 return node.splitManager ? node.splitManager.isSplitMode : false
             })
+            if (node.splitManager)
+                node.splitManager.refreshTerminalRenderMode()
             t.showDividerRight = Qt.binding(function() {
                 return node.treeData ? (node.treeData._showDividerRight || false) : false
             })
@@ -165,5 +178,10 @@ Item {
         onLoaded: {
             item.treeNode = node
         }
+    }
+
+    Shortcut {
+        sequence: "Meta+Shift+D"
+        onActivated: splitModel.dumpSplitDebug()
     }
 }

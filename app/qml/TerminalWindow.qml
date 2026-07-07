@@ -52,16 +52,18 @@ ApplicationWindow {
 
     function _loadShortcuts() {
         var mac = Qt.platform.os === "osx"
-        var xhr = new XMLHttpRequest()
-        xhr.open("GET", "qrc:/shortcuts.json", false)
-        xhr.send()
-        var raw = JSON.parse(xhr.responseText)
+        var bundledShortcuts = fileIO.read("qrc:/shortcuts.json")
+        if (bundledShortcuts === "") {
+            console.log("Unable to load bundled shortcuts from qrc:/shortcuts.json")
+            return
+        }
+        var raw = JSON.parse(bundledShortcuts)
 
         // Optional user override — gracefully ignored if absent
-        var userPath = fileio.userShortcutsPath()
+        var userPath = fileIO.userShortcutsPath()
         if (userPath !== "") {
             try {
-                var userFile = fileio.read(userPath)
+                var userFile = fileIO.read(userPath)
                 if (userFile !== "") {
                     var userRaw = JSON.parse(userFile)
                     for (var uk in userRaw) raw[uk] = userRaw[uk]
@@ -171,7 +173,7 @@ ApplicationWindow {
     Action {
         id: closeTabAction
         text: qsTr("Close Tab")
-        onTriggered: terminalTabs.closePane(terminalTabs.focusedPaneId)
+        onTriggered: terminalTabs.closeFocusedPane()
     }
     Action {
         id: commandPaletteAction

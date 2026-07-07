@@ -32,7 +32,6 @@ ShaderTerminal {
 
     property bool showDividerRight: false
     property bool showDividerBottom: false
-    property bool splitActive: false
     property bool isSplitLayout: false
     property int paneId: -1
 
@@ -69,11 +68,19 @@ ShaderTerminal {
 
     function refresh() {
         terminal.mainTerminal.update()
-        // Force texture regeneration after reparenting by toggling live
         var src = terminal.mainSource
         src.live = false
         src.scheduleUpdate()
         src.live = true
+
+        // // Force kterminal geometryChange so the PTY rows/cols sync to the new pane size.
+        // // 0 → bound value guarantees newGeometry != oldGeometry inside TerminalDisplay.
+        // var kt = terminal.mainTerminal
+        // var savedW = kt.width, savedH = kt.height
+        // kt.width = 0
+        // kt.height = 0
+        // kt.width = savedW
+        // kt.height = savedH
     }
 
     //  EFFECTS  ////////////////////////////////////////////////////////////////
