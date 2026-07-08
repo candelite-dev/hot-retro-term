@@ -32,6 +32,7 @@ layout(std140, binding = 0) uniform ubuf {
     float frameSize;
     float bloom;
     int rasterMode;
+    float frameActive;
 };
 
 layout(binding = 0) uniform sampler2D noiseSource;
@@ -121,19 +122,28 @@ void main() {
     vec2 staticCoords = distortCoordinates(qt_TexCoord0);
     vec2 coords = qt_TexCoord0;
 
-    float dst = sin((coords.y + time) * vDistortionFreq);
-    coords.x += dst * vDistortionScale;
+    if (vDistortionScale > 0.0)
+        coords.x += sin((coords.y + time) * vDistortionFreq) * vDistortionScale;
 
-    vec4 noiseTexel = texture(noiseSource, scaleNoiseSize * coords + vec2(fract(time / 0.051), fract(time / 0.237)));
+    // Uniform-gated: skip the noise fetch when nothing consumes it.
+    // Zero-fill is exact — every use below multiplies by staticNoise or jitter.
+    vec4 noiseTexel = vec4(0.0);
+    if (staticNoise > 0.0 || jitter > 0.0)
+        noiseTexel = texture(noiseSource, scaleNoiseSize * coords + vec2(fract(time / 0.051), fract(time / 0.237)));
 
     vec2 txt_coords = coords + (noiseTexel.ba - vec2(0.5)) * jitterDisplacement * jitter;
 
     float color = 0.0001;
     color += noiseTexel.a * staticNoise * (1.0 - distance * 1.3);
-    color += randomPass(coords * virtualResolution) * glowingLine;
+    if (glowingLine > 0.0)
+        color += randomPass(coords * virtualResolution) * glowingLine;
 
-    // frameSource is null (transparent) when frame is disabled or in split mode — no-op
-    vec4 frameColor = texture(frameSource, qt_TexCoord0);
+    // frameActive mirrors terminalFrameLoader.active; when 0 the sampler is
+    // null (transparent) and the fetch can be skipped — vec4(0) is a no-op
+    // in both uses of frameColor below.
+    vec4 frameColor = vec4(0.0);
+    if (frameActive > 0.5)
+        frameColor = texture(frameSource, qt_TexCoord0);
     color *= (1.0 - frameColor.a);
 
     vec3 txt_color = texture(screenBuffer, txt_coords).rgb;

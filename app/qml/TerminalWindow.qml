@@ -37,6 +37,10 @@ ApplicationWindow {
     property bool fullscreen: false
     onFullscreenChanged: visibility = (fullscreen ? Window.FullScreen : Window.Windowed)
 
+    // Keeps appRoot.anyWindowVisible current so the render loop can stop
+    // while every window is minimized or hidden.
+    onVisibilityChanged: appRoot.recomputeWindowVisibility()
+
     menuBar: WindowMenu { }
 
     property real normalizedWindowScale: 1024 / ((0.5 * width + 0.5 * height))

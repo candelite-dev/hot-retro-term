@@ -43,6 +43,9 @@ Loader {
     anchors.fill: parent
 
     function completelyUpdate() {
+        // Keep the time source running until this trail has fully faded.
+        timeManager.notifyContentPainted()
+
         let newTime = timeManager.time
         if (newTime > lastUpdate) {
             prevLastUpdate = lastUpdate
@@ -112,8 +115,6 @@ Loader {
 
         ShaderEffect {
             id: burnInShaderEffect
-
-            property real time: timeManager.time
 
             property variant txt_source: burnInEffect.textSource !== null ? burnInEffect.textSource : kterminalSource
             property variant burnInSource: burnInEffectSource
