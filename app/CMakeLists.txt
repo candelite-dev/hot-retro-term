@@ -88,6 +88,12 @@ find_program(QSB_EXECUTABLE qsb
 if(QSB_EXECUTABLE)
     set(SHADERS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
     set(QSB_FLAGS --glsl "100 es,120,150" --hlsl 50 --msl 12 --qt6)
+    # qsb -O shells out to spirv-opt; only enable when it exists so
+    # compile_shaders keeps working on machines without SPIRV-Tools.
+    find_program(SPIRV_OPT_EXECUTABLE spirv-opt)
+    if(SPIRV_OPT_EXECUTABLE)
+        list(APPEND QSB_FLAGS -O)
+    endif()
     set(ALL_SHADER_OUTPUTS)
 
     # All shaders compiled directly — no combinatoric variants
@@ -100,7 +106,6 @@ if(QSB_EXECUTABLE)
         terminal_frame.vert
         terminal_static.frag
         terminal_static.vert
-        passthrough.vert
         window_curvature.frag
         window_curvature.vert
     )

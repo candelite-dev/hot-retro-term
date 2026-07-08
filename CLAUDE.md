@@ -11,17 +11,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Dependencies**: Qt 6.10.0+ with `qt5compat` and `qtshadertools` modules, plus platform libs (OpenGL, Xlib on Linux; CoreFoundation on macOS).
 
 ```bash
-# Build
-qmake && make
+# Build (CMake; defaults to Release)
+cmake -B build && cmake --build build -j
 
-# Run
-./cool-retro-term
+# Run (bundle lands at the build-dir root)
+./build/cool-retro-term.app/Contents/MacOS/cool-retro-term
 
 # Build distributable (Linux)
 ./scripts/build-appimage.sh
 ```
 
-**Note**: Shader `.qsb` files are pre-compiled binaries (via Qt Shader Baker). Modifying `.frag` shaders requires recompiling them with `qsb`.
+**Performance testing must use a Release build.** The CLion default `cmake-build-debug/` binary compiles qmltermwidget's per-character hot loops without optimization and is unrepresentative (several times slower on the C++ paths). The root CMakeLists defaults `CMAKE_BUILD_TYPE` to Release precisely because KDSingleApplication would otherwise default this repo to Debug (it detects `.git`).
+
+**Note**: Shader `.qsb` files are pre-compiled binaries (via Qt Shader Baker). Modifying `.frag`/`.vert` shaders requires recompiling: `cmake --build build --target compile_shaders`.
 
 ## Architecture
 

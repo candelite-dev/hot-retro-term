@@ -13,19 +13,30 @@ if [ -z "$VERSION" ]; then
     VERSION="unknown"
 fi
 
-if ! command -v qmake >/dev/null; then
-    echo "qmake not found in PATH." >&2
+CMAKE="${CMAKE:-cmake}"
+if ! command -v "$CMAKE" >/dev/null; then
+    echo "cmake not found in PATH (or set CMAKE=/path/to/cmake)." >&2
     exit 1
 fi
-QT_DIR="${QT_DIR:-$(qmake -query QT_INSTALL_PREFIX)}"
+if [ -z "${QT_DIR:-}" ]; then
+    if ! command -v qmake >/dev/null; then
+        echo "qmake not found in PATH; set QT_DIR to the Qt prefix (needed to locate macdeployqt)." >&2
+        exit 1
+    fi
+    QT_DIR="$(qmake -query QT_INSTALL_PREFIX)"
+fi
 QT_BIN="${QT_DIR%/}/bin"
 
 mkdir -p "$BUILD_DIR"
 rm -f "$BUILD_DIR/${APP%.app}.dmg"
-pushd "$BUILD_DIR"
 
-"$QT_BIN/qmake" CONFIG+=release "$REPO_ROOT/cool-retro-term.pro"
-make -j"$JOBS"
+"$CMAKE" -S "$REPO_ROOT" -B "$BUILD_DIR" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH="$QT_DIR" \
+    ${CMAKE_OSX_ARCHITECTURES:+-DCMAKE_OSX_ARCHITECTURES="$CMAKE_OSX_ARCHITECTURES"}
+"$CMAKE" --build "$BUILD_DIR" -j"$JOBS"
+
+pushd "$BUILD_DIR"
 
 PLUGIN_DST="$APP/Contents/PlugIns/qmltermwidget"
 rm -rf "$PLUGIN_DST"

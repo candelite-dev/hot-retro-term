@@ -171,7 +171,6 @@ Two uber-shaders replace what was 113 pre-compiled variant files:
 | `terminal_static.vert` / `terminal_dynamic.vert` | Matching vertex stages |
 | `burn_in.frag/.vert` | Burn-in accumulation pass |
 | `terminal_frame.frag/.vert` | Decorative bezel |
-| `passthrough.vert` | Identity vertex pass |
 | `window_curvature.frag/.vert` | Window-level barrel distortion |
 
 Shader variants are selected at **runtime** via uniform branches
