@@ -17,7 +17,7 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 | ID | タスク | Phase | 依存 | status |
 |----|--------|-------|------|--------|
 | A1 | qmltermwidget CMake ソース差し替え分岐 | A | - | done |
-| A2 | Pty.h 振り分け + PtyWin 骨格（スタブ実装） | A | A1 | todo |
+| A2 | Pty.h 振り分け + PtyWin 骨格（スタブ実装） | A | A1 | done |
 | A3 | Session.cpp の3箇所 ifdef | A | A2 | todo |
 | A4 | POSIX include ガード + 死んだ unistd 削除 | A | - | todo |
 | A5 | History/BlockArray の mmap 排除 | A | - | todo |
@@ -49,3 +49,5 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 - 2026-07-19: 障害対応: codex-cli 0.135.0 が gpt-5.6-sol 非対応（400）→ 0.144.6 へ更新して A1 再委任（Claude）
 - 2026-07-19: 環境判明: cmake は CLion 同梱 + x86_64/Rosetta フラグ必須（正は codex-workflow.md）。qmltermwidget はサブモジュール（fork 無し・ユーザー未コミット変更あり）→ サブモジュール内 git 操作禁止、A8 前に fork/vendor の人間判断が必要（Claude）
 - 2026-07-19 / A1 / 監査PASS: サブモジュール diff は CMakeLists.txt のみ・POSIX 側ソース24本と define 群の完全温存を flags.make/link.txt で実証・mac x86_64 ビルド exit 0・起動スモーク OK、status を done に / CI・実機待ち: WIN32 分岐の実コンパイル（A2 で PtyWin.* 作成後、A8 の windows job で判明）（監査役）
+- 2026-07-19 / A2 / Pty.h の Windows 振り分けと PtyWin ConPTY スタブ骨格を追加 / 成功: macOS x86_64 configure・build ともに exit 0、`cool-retro-term` まで全ターゲットをビルド、status を review に更新
+- 2026-07-19 / A2 / 監査PASS: Pty.h は追加5行・削除0（numstat で #else 側1バイト不変を実証）・PtyWin.h 公開シグネチャは POSIX 版と完全一致（receivedData/sendData/setUtf8Mode/lockPty/start(5引数) 含む）・windowSize()=QSize(cols,lines) 軸順準拠・Session の QProcess/KProcess 表面充足（pty()->slaveFd() は設計どおり A3 残件）・CMakeLists.txt は A1 分から未改変（mtime 00:36 vs A2 群 01:00）・mac x86_64 で Pty.h touch 強制再コンパイル（Pty.cpp/Session.cpp/mocs）込みビルド exit 0・mac ビルドに PtyWin 参照ゼロ、status を done に / CI・実機待ち: PtyWin.h/.cpp の Windows 実コンパイル（A8 windows job）。B1 向けメモ: _WIN32_WINNT=0x0A00 のみだと NTDDI_VERSION が RTM 相当になり consoleapi.h の CreatePseudoConsole 群（NTDDI_WIN10_RS5 ガード）が隠れる可能性 → B1/A8 でエラー時は NTDDI_VERSION=0x0A000006 を CMake に追加（A2 スタブは関数未使用のため影響なし）（監査役）
