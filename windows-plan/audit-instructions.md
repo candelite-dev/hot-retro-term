@@ -36,7 +36,10 @@
 
 ### 4. 完了条件の実地確認
 - タスクの「完了条件」各項目: mac 検証可能なもの → **実行して**確認。
-  ビルド: `cmake -B build && cmake --build build -j`（QML を触った diff なら先に `touch app/resources.qrc`）
+  ビルド（cmake は PATH に無い・Qt は x86_64/Rosetta。タスクファイル内の `cmake -B build ...` 表記はこれに読み替える）:
+    /Applications/CLion.app/Contents/bin/cmake/mac/aarch64/bin/cmake -B build -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_PREFIX_PATH=/usr/local
+    /Applications/CLion.app/Contents/bin/cmake/mac/aarch64/bin/cmake --build build -j
+  （QML を触った diff なら先に `touch app/resources.qrc`）
 - Windows 専用項目 → コード読解で妥当性を判定し「CI/実機待ち」タグ
 
 ### 5. コード品質（この移植で踏みやすい地雷）

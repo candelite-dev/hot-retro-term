@@ -16,7 +16,7 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 
 | ID | タスク | Phase | 依存 | status |
 |----|--------|-------|------|--------|
-| A1 | qmltermwidget CMake ソース差し替え分岐 | A | - | todo |
+| A1 | qmltermwidget CMake ソース差し替え分岐 | A | - | done |
 | A2 | Pty.h 振り分け + PtyWin 骨格（スタブ実装） | A | A1 | todo |
 | A3 | Session.cpp の3箇所 ifdef | A | A2 | todo |
 | A4 | POSIX include ガード + 死んだ unistd 削除 | A | - | todo |
@@ -32,6 +32,10 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 | C2 | 磨き: デバッグショートカット + README | C | - | todo |
 | C3 | （任意）Job Object で孫プロセス tree-kill | C | B3 | todo |
 
+⚠ **A8 の前提条件（人間判断待ち）**: qmltermwidget サブモジュールは upstream 直指し・fork 無し・
+ユーザー未コミット変更あり。CI がサブモジュール内の変更を見るには fork か vendor 化が必要
+（詳細: codex-workflow.md「サブモジュール制約」、作業ログ 2026-07-19）。A8 着手前にユーザーへ確認。
+
 **Phase ゲート**:
 - **A 完了** = GitHub Actions の windows job がコンパイル・リンク通過、**かつ ubuntu/macos job が緑のまま**
 - **B 完了** = Windows 実機/VM で cmd.exe が CRT シェーダー越しに動く（詳細チェックリストは `plan.md` の検証節）
@@ -40,3 +44,8 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 ## 作業ログ
 
 - 2026-07-15: タスクシステム初期化。plan.md 正本化、A1〜C3 の15タスク定義（Claude）
+- 2026-07-19 / A1 / CMake の WIN32/POSIX ソース・定義分岐を実装 / 検証失敗: `cmake` が未インストール（exit 127）のため macOS ビルド未確認、status は in-progress のまま
+- 2026-07-19 / A1 / macOS x86_64 configure・build を再検証 / 成功: `cool-retro-term` まで全ターゲットをビルド（exit 0）、status を review に更新
+- 2026-07-19: 障害対応: codex-cli 0.135.0 が gpt-5.6-sol 非対応（400）→ 0.144.6 へ更新して A1 再委任（Claude）
+- 2026-07-19: 環境判明: cmake は CLion 同梱 + x86_64/Rosetta フラグ必須（正は codex-workflow.md）。qmltermwidget はサブモジュール（fork 無し・ユーザー未コミット変更あり）→ サブモジュール内 git 操作禁止、A8 前に fork/vendor の人間判断が必要（Claude）
+- 2026-07-19 / A1 / 監査PASS: サブモジュール diff は CMakeLists.txt のみ・POSIX 側ソース24本と define 群の完全温存を flags.make/link.txt で実証・mac x86_64 ビルド exit 0・起動スモーク OK、status を done に / CI・実機待ち: WIN32 分岐の実コンパイル（A2 で PtyWin.* 作成後、A8 の windows job で判明）（監査役）

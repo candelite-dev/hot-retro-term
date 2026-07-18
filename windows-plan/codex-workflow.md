@@ -72,8 +72,14 @@ codex exec "<下記テンプレを貼る>"   # 非対話・投げっぱなし
    - POSIX（macOS/Linux）側の挙動を一切変えない。変更は #ifdef Q_OS_WIN / if(WIN32) の
      内側か、タスクファイルが明示した箇所だけ。POSIX側の既存コードは1バイトも書き換えない。
    - git commit はしない。working tree に diff を残すだけ。
-   - このマシンは macOS。C++/CMake を触ったら mac 側ビルドが壊れていないことを
-     `cmake -B build && cmake --build build -j` で確認する（QMLのみの変更なら省略可）。
+   - このマシンは macOS。C++/CMake を触ったら mac 側ビルドが壊れていないことを確認する。
+     ビルドコマンドの正（cmake は PATH に無い・Qt は x86_64/Rosetta なので必ずこの形。
+     タスクファイル内の `cmake -B build ...` 表記はすべてこれに読み替える）:
+       /Applications/CLion.app/Contents/bin/cmake/mac/aarch64/bin/cmake -B build -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_PREFIX_PATH=/usr/local
+       /Applications/CLion.app/Contents/bin/cmake/mac/aarch64/bin/cmake --build build -j
+     （QMLのみの変更なら省略可）
+   - qmltermwidget/ は git サブモジュール（ユーザーの未コミット変更が同居、fork remote 無し）。
+     **サブモジュール内で git 操作（commit/checkout/stash/restore）を一切しない**。ファイル編集のみ。
 4. 完了したら windows-plan/TASKS.md の該当行の status を review に書き換え、
    末尾の作業ログに1行（日付 / ID / 要約 / 検証結果）を追記する。
    done にするのは監査役の仕事なので、あなたは done にしない。
@@ -91,3 +97,8 @@ codex exec "<下記テンプレを貼る>"   # 非対話・投げっぱなし
   「--resume で続き」で再開するか、`git checkout -- <files>` で巻き戻して「--fresh で」。
 - **CI 待ちのタスク（A8/B4）**: push は人間か Claude が行う（Codex は commit 禁止のため）。
   CI の失敗ログを貼って「--resume で続き」を回すのが最短ループ。
+- **サブモジュール制約（2026-07-19 判明）**: qmltermwidget は upstream（Swordfish90）直指しの
+  サブモジュールで push 先が無く、ユーザーの未コミット変更が乗っている。よって qmltermwidget 内の
+  コード diff は**未コミットのままサブモジュール内に蓄積**し、親リポジトリには windows-plan/・app/・
+  CI 等のみコミットする。**A8（CI）はサブモジュールの fork か vendor 化の人間判断が前提** —
+  A8 に到達したら実装前に必ずユーザーへ確認する。
