@@ -39,6 +39,8 @@ else()
     )
 endif()
 
+set_property(SOURCE lib/qtermwidget.h PROPERTY SKIP_AUTOMOC ON)
+
 add_library(qmltermwidget MODULE ${QMLTERMWIDGET_SOURCES})
 
 if(WIN32)
