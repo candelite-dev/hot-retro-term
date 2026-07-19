@@ -78,8 +78,8 @@ codex exec "<下記テンプレを貼る>"   # 非対話・投げっぱなし
        /Applications/CLion.app/Contents/bin/cmake/mac/aarch64/bin/cmake -B build -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_PREFIX_PATH=/usr/local
        /Applications/CLion.app/Contents/bin/cmake/mac/aarch64/bin/cmake --build build -j
      （QMLのみの変更なら省略可）
-   - qmltermwidget/ は git サブモジュール（ユーザーの未コミット変更が同居、fork remote 無し）。
-     **サブモジュール内で git 操作（commit/checkout/stash/restore）を一切しない**。ファイル編集のみ。
+   - qmltermwidget/ は **2026-07-19 に vendor 化済み**（通常のトラッキング対象。旧サブモジュール制約は消滅）。
+     KDSingleApplication/ だけは今もサブモジュール — そちらは触らない。
 4. 完了したら windows-plan/TASKS.md の該当行の status を review に書き換え、
    末尾の作業ログに1行（日付 / ID / 要約 / 検証結果）を追記する。
    done にするのは監査役の仕事なので、あなたは done にしない。
@@ -97,8 +97,7 @@ codex exec "<下記テンプレを貼る>"   # 非対話・投げっぱなし
   「--resume で続き」で再開するか、`git checkout -- <files>` で巻き戻して「--fresh で」。
 - **CI 待ちのタスク（A8/B4）**: push は人間か Claude が行う（Codex は commit 禁止のため）。
   CI の失敗ログを貼って「--resume で続き」を回すのが最短ループ。
-- **サブモジュール制約（2026-07-19 判明）**: qmltermwidget は upstream（Swordfish90）直指しの
-  サブモジュールで push 先が無く、ユーザーの未コミット変更が乗っている。よって qmltermwidget 内の
-  コード diff は**未コミットのままサブモジュール内に蓄積**し、親リポジトリには windows-plan/・app/・
-  CI 等のみコミットする。**A8（CI）はサブモジュールの fork か vendor 化の人間判断が前提** —
-  A8 に到達したら実装前に必ずユーザーへ確認する。
+- **サブモジュール制約 → 解消済み（2026-07-19）**: ユーザー判断により qmltermwidget を **vendor 化**
+  （コミット ddda1c1。upstream/ローカル履歴の出自はコミットメッセージと .git/modules/qmltermwidget に保全）。
+  以後 qmltermwidget/ の diff は親リポジトリの通常 diff として扱い、監査 PASS 後のコミットにコードを含める。
+  A8 の前提は満たされた。KDSingleApplication のみ引き続きサブモジュール。
