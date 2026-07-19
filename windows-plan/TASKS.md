@@ -66,3 +66,4 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 - 2026-07-19 / A8 / install-qt-action を全3ジョブで v3 から v4 に更新 / Ruby Psych の YAML 構文検証成功、status は review のまま
 - 2026-07-19 / A8 / Windows MSVC 初回ビルドの wcwidth 未定義を Markus Kuhn の幅判定で補完し、未使用 SSHProcessInfo を Windows から除外 / macOS x86_64 configure・build ともに exit 0、status は review のまま
 - 2026-07-19 / A8 / Windows MSVC 2周目リンクエラー対策として、TerminalDisplay が QTermWidget の enum/alias を使用するため include は維持し qtermwidget.h の AUTOMOC のみ除外 / macOS x86_64 configure・build ともに exit 0、moc_qtermwidget 生成なし、status は review のまま
+- 2026-07-19 / A8 / Windows MSVC 3周目リンクエラーの根治として、TerminalDisplay の QTermWidget 型参照16箇所を正規型へ置換し qtermwidget.h 依存と SKIP_AUTOMOC 回避策を削除 / macOS x86_64 configure・build ともに exit 0、autogen 内 QTermWidget 参照0件・moc_qtermwidget 生成なし、status は review のまま
