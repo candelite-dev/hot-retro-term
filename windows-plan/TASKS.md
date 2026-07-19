@@ -23,7 +23,7 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 | A5 | History/BlockArray の mmap 排除 | A | - | done |
 | A6 | デフォルトシェル COMSPEC 化 + setenv→qputenv | A | - | done |
 | A7 | app側 CMake WIN32 整備 + アイコン + フォント fallback | A | - | done |
-| A8 | CI: windows-latest ジョブ追加 + Qt 6.10 統一 | A | A1〜A7 | todo |
+| A8 | CI: windows-latest ジョブ追加 + Qt 6.10 統一 | A | A1〜A7 | review |
 | B1 | ConPTY spawn 経路の本実装 | B | A8 | todo |
 | B2 | リーダー/ライタースレッド（I/O 本実装） | B | B1 | todo |
 | B3 | リサイズ + 終了順序 + no-op 群の確定 | B | B2 | todo |
@@ -62,3 +62,5 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 - 2026-07-19 / A7 / app CMake に WIN32 GUI・RC 分岐、Windows フォント fallback、4サイズ PNG 埋め込み ICO を追加 / 成功: ICO ヘッダー `00 00 01 00 04 00`・サイズ順 256/128/64/32・offset/PNG署名を検証、macOS x86_64 configure・build ともに exit 0、status を review に更新
 - 2026-07-19 / A7 / 監査PASS: 親 diff は CMakeLists +6/-0・fontmanager +3/-0 の純追加（削除行ゼロ）・新規は crt.ico/crt.rc のみ・帳簿以外の欄外変更なし（A7 窓 15:58-16:30 の mtime 全走査で期待5ファイルのみ、ksession/plugin の 16:06 は A6 監査 touch 痕跡で内容は A6 PASS 時のまま）・サブモジュール numstat は A1〜A6 監査記録と完全一致 / WIN32 節は if(APPLE) 直後の独立ブロック・ターゲット名実物一致・fallback は #elif defined(Q_OS_WIN) で Consolas→Courier New 2段、Q_OS_MAC(Menlo)/#else(Monospace) 温存 / crt.ico 自前パース（python struct・Codex 検証に非依存）: ICONDIR reserved=0/type=1/count=4・エントリ 256(0表記)/128/64/32・全4エントリ PNG 署名 OK・IHDR 寸法=エントリ表記一致・offset+length 連鎖=ファイル末尾 124082 完全一致（隙間/後続データなし）・埋め込み PNG 4枚は既存 icons/NxN/cool-retro-term.png とバイト同一（sha256 一致=隠しペイロード余地なし）・生成スクリプト残置 0 件・git hooks/hooksPath 未接触 / crt.rc は指定1行形式・ico と同一ディレクトリで RC 相対解決 OK / mac 実証: CMakeLists touch 再configure exit 0・fontmanager touch 強制再コンパイル+リンク exit 0・build/ 内 crt.rc 参照 0・CMakeCache に RC 項目なし・バイナリ UTF-16 検索 Menlo=1/Consolas=0/Courier New=0（WIN32 分岐は mac で死文）・起動スモーク 10 秒生存 kill 正常・Monospace 警告は qmltermwidget TerminalDisplay.cpp:421 既定値由来の既知警告（QML diff ゼロ・A7 不関与）で新規フォントエラーなし、status を done に / CI・実機待ち: RC 実コンパイルと GUI サブシステム化（A8 windows job）、タスクバーアイコン表示と Consolas fallback 実挙動（B 実機）。メモ: ico は既存 PNG が4種のみのため 16/48px 非含有の4サイズ — 完了条件「マルチサイズ」は充足、小サイズ表示は 32px 縮小でまかなわれる（監査役）
 - 2026-07-19: A8前提解消: ユーザー判断で qmltermwidget を vendor 化（ddda1c1）。ローカル履歴（fix/qchar-nonbmp-qt6 @ e44cec8）は .git/modules/qmltermwidget とコミットメッセージに保全。監査済み A1〜A6 のコード diff も同コミットで親リポジトリに編入。旧サブモジュール制約は統治文書から撤去（Claude）
+- 2026-07-19 / A8 / Windows MSVC + Ninja ジョブ追加、Qt 6.10.* 統一、windows-port push トリガー追加 / Ruby Psych の YAML 構文検証・git diff --check 成功（PyYAML は未導入）、status を review に更新（yml 完成・push 待ち）
+- 2026-07-19 / A8 / install-qt-action を全3ジョブで v3 から v4 に更新 / Ruby Psych の YAML 構文検証成功、status は review のまま

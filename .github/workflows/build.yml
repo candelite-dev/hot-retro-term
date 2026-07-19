@@ -3,7 +3,7 @@ name: Build
 on:
   pull_request:
   push:
-    branches: [master, feature]
+    branches: [master, feature, windows-port]
 
 jobs:
   build-ubuntu:
@@ -20,9 +20,9 @@ jobs:
           submodules: recursive
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.*'
+          version: '6.10.*'
           modules: 'qt5compat qtshadertools'
           cache: true
 
@@ -57,9 +57,9 @@ jobs:
           submodules: recursive
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.*'
+          version: '6.10.*'
           modules: 'qt5compat qtshadertools'
           cache: true
 
@@ -71,3 +71,34 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)
+
+  build-windows:
+    name: Windows (MSVC)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.*'
+          arch: win64_msvc2022_64
+          modules: 'qt5compat qtshadertools'
+          cache: true
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Check outputs exist
+        shell: pwsh
+        run: |
+          if (!(Test-Path build\cool-retro-term.exe)) { throw "exe missing" }
+          if (!(Test-Path build\qmltermwidget\QMLTermWidget\qmltermwidget.dll)) { throw "plugin dll missing" }
