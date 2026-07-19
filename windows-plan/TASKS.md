@@ -64,3 +64,4 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 - 2026-07-19: A8前提解消: ユーザー判断で qmltermwidget を vendor 化（ddda1c1）。ローカル履歴（fix/qchar-nonbmp-qt6 @ e44cec8）は .git/modules/qmltermwidget とコミットメッセージに保全。監査済み A1〜A6 のコード diff も同コミットで親リポジトリに編入。旧サブモジュール制約は統治文書から撤去（Claude）
 - 2026-07-19 / A8 / Windows MSVC + Ninja ジョブ追加、Qt 6.10.* 統一、windows-port push トリガー追加 / Ruby Psych の YAML 構文検証・git diff --check 成功（PyYAML は未導入）、status を review に更新（yml 完成・push 待ち）
 - 2026-07-19 / A8 / install-qt-action を全3ジョブで v3 から v4 に更新 / Ruby Psych の YAML 構文検証成功、status は review のまま
+- 2026-07-19 / A8 / Windows MSVC 初回ビルドの wcwidth 未定義を Markus Kuhn の幅判定で補完し、未使用 SSHProcessInfo を Windows から除外 / macOS x86_64 configure・build ともに exit 0、status は review のまま

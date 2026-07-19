@@ -1010,6 +1010,7 @@ private:
 };
 #endif
 
+#if !defined(Q_OS_WIN)
 SSHProcessInfo::SSHProcessInfo(const ProcessInfo& process)
     : _process(process)
 {
@@ -1157,6 +1158,7 @@ QString SSHProcessInfo::format(const QString& input) const
 
     return output;
 }
+#endif
 
 ProcessInfo* ProcessInfo::newInstance(int aPid, bool enableEnvironmentRead)
 {
