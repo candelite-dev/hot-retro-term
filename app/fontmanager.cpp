@@ -348,6 +348,9 @@ void FontManager::updateComputedFont()
     }
 #if defined(Q_OS_MAC)
     fallbackChain.append(QStringLiteral("Menlo"));
+#elif defined(Q_OS_WIN)
+    fallbackChain.append(QStringLiteral("Consolas"));
+    fallbackChain.append(QStringLiteral("Courier New"));
 #else
     fallbackChain.append(QStringLiteral("Monospace"));
 #endif

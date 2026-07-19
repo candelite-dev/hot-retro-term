@@ -65,6 +65,12 @@ if(APPLE)
     target_link_libraries(cool-retro-term PRIVATE "-framework CoreFoundation")
 endif()
 
+if(WIN32)
+    enable_language(RC)
+    set_target_properties(cool-retro-term PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_sources(cool-retro-term PRIVATE icons/crt.rc)
+endif()
+
 # QMLTermWidget is loaded at runtime via QML import path, not linked.
 # Declare explicit dependency so CLion/cmake --build always builds the plugin first.
 add_dependencies(cool-retro-term qmltermwidget)
