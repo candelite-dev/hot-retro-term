@@ -120,6 +120,14 @@ windeployqtステージング（`--qmldir` 2本: app/qml と plugin側、Qt5Comp
 
 ## 検証（Windows実機/VMあり前提）
 
+**検証環境（2026-07-20 確立、SSH 常用可）**: ホスト `windows`（`~/.ssh/config` 登録済み、Tailscale 経由、Win11 build 26200 AMD64。SSH ユーザーは管理者・リモート既定シェルは cmd）。
+- ツールチェーン: VS Build Tools 2022（VCTools ワークロード + Win SDK、サイレント導入）+ CMake + Ninja（winget）
+- Qt **6.10.3** = `C:\Qt\6.10.3\msvc2022_64`（aqt 導入。CI と同構成: `qt5compat` + `qtshadertools`）
+- リポジトリ: `C:\crt\src`（windows-port ブランチ、KDSingleApplication submodule 込み）
+- セットアップのログ/完了マーカー: `C:\crt-setup\`（`setup2.log`、`*.done`）
+- 実機ビルドの正（cmd から）: `call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && cmake -S C:\crt\src -B C:\crt\src\build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:\Qt\6.10.3\msvc2022_64 && cmake --build C:\crt\src\build --parallel`
+- 注意: SSH 経由の GUI 起動は非対話セッション扱いになり画面には出ない。スモークは「プロセス存在確認（子 cmd.exe / conhost.exe）」か `-platform offscreen` を基本にし、描画目視はユーザーの物理ログオンで行う。SSH のリモートコマンドは cmd 解釈なので複雑な `&` 連結や二重引用符入れ子は quoting 事故のもと — 1 コマンドずつ素直に投げる。
+
 1. ビルド: MSVC + Qt 6.10 で `cmake -B build && cmake --build build`（シェーダー再コンパイル不要 — HLSL焼き込み済み）。
 2. スモーク: cmd.exe / PowerShell 起動、キー入力・エコー、ウィンドウリサイズ（ResizePseudoConsole反映）、256色表示。
 3. 実戦: ssh接続して vim / htop（VT102エミュレーションの検証）。スクロールバック。
