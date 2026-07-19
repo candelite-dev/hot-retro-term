@@ -20,7 +20,7 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 | A2 | Pty.h 振り分け + PtyWin 骨格（スタブ実装） | A | A1 | done |
 | A3 | Session.cpp の3箇所 ifdef | A | A2 | done |
 | A4 | POSIX include ガード + 死んだ unistd 削除 | A | - | done |
-| A5 | History/BlockArray の mmap 排除 | A | - | todo |
+| A5 | History/BlockArray の mmap 排除 | A | - | done |
 | A6 | デフォルトシェル COMSPEC 化 + setenv→qputenv | A | - | todo |
 | A7 | app側 CMake WIN32 整備 + アイコン + フォント fallback | A | - | todo |
 | A8 | CI: windows-latest ジョブ追加 + Qt 6.10 統一 | A | A1〜A7 | todo |
@@ -56,3 +56,5 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 - 2026-07-19 / A3 / 監査PASS: Session.cpp は追加26・削除0（numstat）で3箇所とも #ifdef Q_OS_WIN 構造内・POSIX 本体無変更（#else 直後の空行1行のみ純追加＝意味なし）・close() は共有 _autoClose/_wantedClose 設定後に kill→closePty の契約順序・SIG 定数は close() の #else 内 :594/:601/:610 のみ（他の SIG ヒットは全て Qt SIGNAL マクロ）・sendSignal 呼び出し元は KSession ラッパーと close() POSIX 分岐のみ・CMakeLists.txt/Pty.h/PtyWin.* は mtime（00:36/01:09/01:00）が A3 作業窓（05:25-05:28）より前で未接触＋Pty.h diff 内容も A2 記録の5行と一致・mac x86_64 再ビルド exit 0（Session.cpp.o 05:26 が現行ソース反映）・起動スモーク代行成功: 34秒生存・子プロセス zsh 起動＝シェル成立・ログは既知の無害警告のみ、status を done に / CI・実機待ち: Q_OS_WIN 側3分岐の実コンパイルと実挙動（A8 windows job、close() の kill→closePty 実動作は B3 実機）（監査役）
 - 2026-07-19 / A4 / ProcessInfo の POSIX include を Windows 除外し、3ファイルの未使用 unistd include を削除 / 成功: 使用シンボル grep 0件、macOS x86_64 configure・build ともに exit 0、`cool-retro-term` までビルド
 - 2026-07-19 / A4 / 監査PASS: numstat は ProcessInfo +2/-0（ガード2行のみ・非include行変更ゼロ）・Emulation 0/-2・Screen 0/-1・Vt102 0/-1 / Q_OS_WIN 判定は先行 #include "ProcessInfo.h"（QtCore/QFile等）経由で成立、QtGlobal 追加不要は正当 / unistd シンボル独立grep 0件（Pty.cpp 陽性対照2件でパターン有効性を実証、緩い単語grepのヒットは全てライセンス文の "write"）/ ガード外 POSIX 使用なし（getpwuid_r は :359 既存 !Q_OS_WIN 内、readlink/MAXPATHLEN は Q_OS_LINUX 節内、newInstance は #else→NullProcessInfo）/ mac-vkcode.h 不接触 / A1〜A3 ファイル未接触（mtime 00:36/01:00/01:09/05:25 vs A4 窓 11:03、numstat も A2/A3 記録と一致）/ mac x86_64 で4ファイル touch 強制再コンパイル+リンク exit 0（.o 4本とも 11:12 更新）/ 手順外の逸脱1件: Emulation.cpp 末尾空行1本の削除（空白のみ・意味的変化ゼロのため許容、報告に明記）、status を done に / CI・実機待ち: MSVC での実コンパイル（A8 windows job）、Linux 側 unistd 削除の最終確認（A8 ubuntu job — シンボル使用ゼロ実証済みでリスク極小）（監査役）
+- 2026-07-19 / A5 / Windows で History の mmap と BlockArray 参照を排除し CRT seek/read/write と malloc/free に分岐 / macOS x86_64 configure・build は成功（exit 0）、read/write 呼び出しは HistoryFile 内のみ・BlockArray 履歴型の外部参照0件、GUIサービス接続エラーでアプリ起動は exit 1 のためスクロールバック確認は監査役代行
+- 2026-07-19 / A5 / 監査PASS（代行: メインFable — 監査サブエージェントがClaude上限で中断したため。命令書チェックリストは全項目実施）: diff は History.h/.cpp のみ・純追加で削除行ゼロ・POSIX mmap 経路は #else 側に1バイト不変・read/write マクロのメンバ呼び波及を独立grepで被害ゼロ実証（意図した CRT 呼び2箇所のみ、define は全include後）・BlockArray 外部参照ゼロ・touch強制再コンパイル exit 0・-e 起動で seq 5000 スクロールバック充填 12秒生存クラッシュなし、status を done に / CI・実機待ち: Q_OS_WIN 側分岐（malloc/free・io.h マッピング・map() no-op）の実コンパイル（A8）（Claude）
