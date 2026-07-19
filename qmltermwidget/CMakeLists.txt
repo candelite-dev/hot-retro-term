@@ -48,6 +48,7 @@ if(WIN32)
         WIN32_LEAN_AND_MEAN
         _WIN32_WINNT=0x0A00
         WINVER=0x0A00
+        NTDDI_VERSION=0x0A000006
     )
 else()
     target_compile_definitions(qmltermwidget PRIVATE
