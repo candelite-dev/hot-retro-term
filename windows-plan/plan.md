@@ -142,3 +142,4 @@ windeployqtステージング（`--qmldir` 2本: app/qml と plugin側、Qt5Comp
 - multi-config generator（Visual Studio直）だと出力ディレクトリに `/Release` が付きプラグイン配置が崩れる → **Ninja単一構成を標準に**（CIもNinja）。
 - ConPTYはWindows 10 1809+ 必須（2026年現在、実質問題なし）。
 - `TerminateProcess` は直接の子しか殺さない（cmd配下の孫が残り得る）→ v1許容、Phase CのJob Objectで対処可。
+- **子プロセスの stdout ハンドル継承**（B3監査 2026-07-20 発見・非ブロッキング）: アプリの実 stdout を明示リダイレクトした場合、子シェルの生出力が pseudoconsole 経由の表示とは別にアプリ継承 stdout ハンドルへも到達する（`modifier` の `inheritHandles=false` 下でも観測、機序は STARTF_USESTDHANDLES 未クリアが疑わしい）。**本アプリは GUI subsystem 実行体で通常起動時は stdout ハンドルを持たないため実運用では不可視・無害**。ハードニングするなら `installCreateProcessModifier` の `m_siEx.StartupInfo` で `hStdInput/Output/Error=nullptr` を明示（+ dwFlags に STARTF_USESTDHANDLES を立てない）で子を pseudoconsole のみに閉じ込める。継承先が未読 pipe だと 64KB 充満で子が block し得る点だけ注意（B1/B4 領域の任意対応）。

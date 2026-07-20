@@ -31,12 +31,12 @@ public:
     char erase() const;
     int foregroundProcessGroup() const;
     void closePty();
-    void setEmptyPTYProperties() {}
-    void setWriteable(bool) {}
+    void setEmptyPTYProperties();
+    void setWriteable(bool writeable);
 
 public slots:
-    void setUtf8Mode(bool) {}
-    void lockPty(bool) {}
+    void setUtf8Mode(bool on);
+    void lockPty(bool lock);
     void sendData(const char *buffer, int length);
 
 signals:

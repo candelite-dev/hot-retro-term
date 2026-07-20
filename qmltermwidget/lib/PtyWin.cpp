@@ -73,7 +73,14 @@ Pty::Pty(int ptyMasterFd, QObject *parent)
     qWarning("PtyWin: ptyMasterFd is ignored");
 }
 
-Pty::~Pty() = default;
+Pty::~Pty()
+{
+    if (state() != QProcess::NotRunning) {
+        kill();
+        waitForFinished(1000);
+    }
+    closePty();
+}
 
 int Pty::start(const QString &program, const QStringList &arguments,
                const QStringList &environment, ulong winid, bool /*addToUtmp*/)
@@ -111,6 +118,8 @@ void Pty::setWindowSize(int lines, int cols)
 {
     _windowLines = lines;
     _windowColumns = cols;
+    if (m_hPC)
+        ResizePseudoConsole(m_hPC, COORD { SHORT(cols), SHORT(lines) });
 }
 
 QSize Pty::windowSize() const
@@ -145,14 +154,21 @@ int Pty::foregroundProcessGroup() const
 
 void Pty::closePty()
 {
-    if (m_hPC) {
-        ClosePseudoConsole(m_hPC);
-        m_hPC = nullptr;
+    if (m_writerThread) {
+        m_writer = nullptr;
+        m_writerThread->quit();
+        m_writerThread->wait(1000);
     }
     if (m_inWrite != INVALID_HANDLE_VALUE) {
         CloseHandle(m_inWrite);
         m_inWrite = INVALID_HANDLE_VALUE;
     }
+    if (m_hPC) {
+        ClosePseudoConsole(m_hPC);
+        m_hPC = nullptr;
+    }
+    if (m_reader)
+        m_reader->wait(2000);
     if (m_outRead != INVALID_HANDLE_VALUE) {
         CloseHandle(m_outRead);
         m_outRead = INVALID_HANDLE_VALUE;
@@ -162,6 +178,26 @@ void Pty::closePty()
             reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(m_attrListBuffer.data()));
         m_attrListBuffer.clear();
     }
+}
+
+void Pty::setUtf8Mode(bool /*on*/)
+{
+    // ConPTY has no termios; conhost owns the line discipline.
+}
+
+void Pty::lockPty(bool /*lock*/)
+{
+    // ConPTY has no termios; conhost owns the line discipline.
+}
+
+void Pty::setEmptyPTYProperties()
+{
+    // ConPTY has no termios; conhost owns the line discipline.
+}
+
+void Pty::setWriteable(bool /*writeable*/)
+{
+    // ConPTY has no termios; conhost owns the line discipline.
 }
 
 void Pty::sendData(const char *buffer, int length)
