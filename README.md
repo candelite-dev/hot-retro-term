@@ -56,6 +56,35 @@ For platform-specific dependency setup, see the upstream wiki:
 - [Linux build instructions](https://github.com/Swordfish90/cool-retro-term/wiki/Build-Instructions-(Linux))
 - [macOS build instructions](https://github.com/Swordfish90/cool-retro-term/wiki/Build-Instructions-(macOS))
 
+### Windows
+
+Windows builds require Windows 10 version 1809 or later (for ConPTY), Qt 6.10+
+with the `qt5compat` and `qtshadertools` modules, MSVC 2022, and Ninja.
+
+Use the Ninja single-config generator. Visual Studio multi-config generators add a
+`Release` subdirectory to the output layout, which breaks the relative placement
+of the QML plugins.
+
+```powershell
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel
+```
+
+To stage the application with its Qt runtime and QML dependencies using
+`windeployqt`, run:
+
+```powershell
+cmake --build build --target deploy_windows
+```
+
+Known limitations and terminal setup notes:
+
+- The executable uses the Windows GUI subsystem, so `--help` and `--version` do
+  not write their output to a console.
+- The default shell is `%COMSPEC%` (`cmd.exe`). To use PowerShell or WSL, enable
+  the custom command in Settings and specify `powershell` or `wsl.exe`.
+- If a child program displays garbled characters, run `chcp 65001` before
+  starting it.
+
 ## Credits
 
 Based on [cool-retro-term](https://github.com/Swordfish90/cool-retro-term) by [Swordfish90](https://github.com/Swordfish90).

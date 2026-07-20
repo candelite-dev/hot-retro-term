@@ -181,7 +181,7 @@ Item {
     }
 
     Shortcut {
-        sequence: "Meta+Shift+D"
+        sequence: appSettings.isMacOS ? "Meta+Shift+D" : "Ctrl+Shift+F12"
         onActivated: splitModel.dumpSplitDebug()
     }
 }
