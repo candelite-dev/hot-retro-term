@@ -17,6 +17,10 @@
 qmltermwidgetのPTY層（~1,640行、全体の約10%）の ConPTY 置換に集中しており、
 残りは小さな ifdef 修正とビルド整備だけ。X11依存はゼロ、シェーダーは既にHLSL入り。
 
+## 進捗（2026-07-20 更新）
+
+**全15タスク（A1〜C3）実装・実機検証・監査・CI緑まで完了。** Phase A（コンパイル/リンク）→ Phase B（ConPTY 実働: spawn/reader-writer/resize+shutdown/windeployqt）→ Phase C（release zip/README+shortcut/Job Object tree-kill）。作業ブランチ `windows-port`（draft PR #5）。実機 SSH（ホスト `windows`）で cmd.exe spawn・6MB 排水・exit 0・Qt 未導入相当の自足起動・zip 展開起動・孫プロセス tree-kill を実証。**残りはユーザー判断待ち**: ①物理ログオンでの GUI 目視（CRT 表示/タイプ/リサイズ/split/永続化/単一インスタンス）②release.yml 実行（master マージ or タグ打ち）③draft PR の ready 昇格。進捗の正本は TASKS.md。
+
 ## 規模感サマリ
 
 | 区分 | 割合 | 内容 |
