@@ -101,6 +101,20 @@ int Pty::start(const QString &program, const QStringList &arguments,
         return -1;
     }
 
+    m_hJob = CreateJobObjectW(nullptr, nullptr);
+    if (m_hJob) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION info {};
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(m_hJob, JobObjectExtendedLimitInformation, &info, sizeof(info));
+        HANDLE hProc = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE,
+                                   DWORD(processId()));
+        if (hProc) {
+            // Like node-pty, accept the tiny race between spawn and assignment to the Job Object.
+            AssignProcessToJobObject(m_hJob, hProc);
+            CloseHandle(hProc);
+        }
+    }
+
     m_reader = new ConPtyReaderThread(m_outRead, this);
     connect(m_reader, &ConPtyReaderThread::chunk, this, &Pty::onReaderChunk);
     m_reader->start();
@@ -177,6 +191,10 @@ void Pty::closePty()
         DeleteProcThreadAttributeList(
             reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(m_attrListBuffer.data()));
         m_attrListBuffer.clear();
+    }
+    if (m_hJob) {
+        CloseHandle(m_hJob);
+        m_hJob = nullptr;
     }
 }
 

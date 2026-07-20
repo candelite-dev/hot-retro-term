@@ -51,6 +51,7 @@ private:
     void addEnvironmentVariables(const QStringList &environment);
 
     HPCON m_hPC = nullptr;
+    HANDLE m_hJob = nullptr;
     HANDLE m_inWrite = INVALID_HANDLE_VALUE;
     HANDLE m_outRead = INVALID_HANDLE_VALUE;
     QByteArray m_attrListBuffer;
