@@ -17,9 +17,13 @@
 qmltermwidgetのPTY層（~1,640行、全体の約10%）の ConPTY 置換に集中しており、
 残りは小さな ifdef 修正とビルド整備だけ。X11依存はゼロ、シェーダーは既にHLSL入り。
 
-## 進捗（2026-07-20 更新）
+## 進捗（2026-07-21 更新）
 
-**全15タスク（A1〜C3）実装・実機検証・監査・CI緑まで完了。** Phase A（コンパイル/リンク）→ Phase B（ConPTY 実働: spawn/reader-writer/resize+shutdown/windeployqt）→ Phase C（release zip/README+shortcut/Job Object tree-kill）。作業ブランチ `windows-port`（draft PR #5）。実機 SSH（ホスト `windows`）で cmd.exe spawn・6MB 排水・exit 0・Qt 未導入相当の自足起動・zip 展開起動・孫プロセス tree-kill を実証。**残りはユーザー判断待ち**: ①物理ログオンでの GUI 目視（CRT 表示/タイプ/リサイズ/split/永続化/単一インスタンス）②release.yml 実行（master マージ or タグ打ち）③draft PR の ready 昇格。進捗の正本は TASKS.md。
+Phase A〜C（A1〜C3 全15タスク）は実装・CI 完了。**ただし 2026-07-21 の実機物理ディスプレイ検証で重大バグ D1 が発覚**: **Windows 実機で端末内容が一切描画されない**（ベゼル/フレームは出るが CRT スクリーンが黒＋静止白ブロック、入力しても不変。端末バッファには内容あり＝コピー可、PTY/エミュは正常）。→ Phase B ゲート「cmd.exe が CRT シェーダー越しに動く」は**未達**。作業ブランチ `windows-port`（draft PR #5）。
+
+**D1 は Codex 調査中**（`tasks/D1-crt-render-windows.md`）。切り分けで PTY/フォント/スクリーン/描画スロットル/低解像度パスは除外済み、有力仮説は QQuickPaintedItem→ShaderEffectSource キャプチャが D3D11 で空。**重大な教訓: Phase B の「実機スモーク」は全てプロセス生存/子プロセス確認どまりで、GUI 描画を誰も目視していなかった**（SSH セッション0はヘッドレスで描画ループ停止＝描画は観測不能）。以後、描画に関わる検証は**必ずユーザーの物理ディスプレイでスクショ目視**する。
+
+D1 解決後の残り: release.yml 実行（master マージ or タグ）、draft PR ready 昇格。進捗の正本は TASKS.md。
 
 ## 規模感サマリ
 
@@ -34,6 +38,7 @@ qmltermwidgetのPTY層（~1,640行、全体の約10%）の ConPTY 置換に集�
 ## そのまま動くもの（意外と多い）
 
 - **シェーダー全部**: `app/CMakeLists.txt:90` の qsb フラグに `--hlsl 50` が既にあり、コミット済み `.qsb` にHLSL 50バイトコードが焼き込み済み（`qsb --dump` で確認）。QtのWindows既定RHI（D3D11）でそのまま動く。RHIバックエンド強制も無し。CRT演出はWindowsでも無修正。
+  - ⚠️ **2026-07-21 訂正（D1）**: この「そのまま動く」は**実機で覆った**。ベゼル/フレームのシェーダーは出るが、**端末内容を運ぶ ShaderEffectSource→CRT シェーダー経路が D3D11 で終端の絵を出せていない**（端末が真っ黒）。`.qsb` に HLSL が焼かれている＝コンパイルは通る、は事実だが、**QQuickPaintedItem のキャプチャ or シェーダーの texture sampling が D3D11 で機能するかは別問題**だった。詳細は D1。
 - **KDSingleApplication**: `Q_OS_WIN` 分岐実装済み（`kdsingleapplication_localsocket.cpp:36-37,78-127`）、WIN32でkernel32リンク済み。単一インスタンス制御はそのまま。
 - **設定永続化**: `Storage.qml`（Qt LocalStorage/SQLite）— クロスプラットフォーム。
 - **フォント**: QRC同梱フォント + `QFontDatabase` 列挙（`app/fontmanager.cpp`）— ポータブル。
