@@ -19,11 +19,17 @@ qmltermwidgetのPTY層（~1,640行、全体の約10%）の ConPTY 置換に集�
 
 ## 進捗（2026-07-21 更新）
 
-Phase A〜C（A1〜C3 全15タスク）は実装・CI 完了。**ただし 2026-07-21 の実機物理ディスプレイ検証で重大バグ D1 が発覚**: **Windows 実機で端末内容が一切描画されない**（ベゼル/フレームは出るが CRT スクリーンが黒＋静止白ブロック、入力しても不変。端末バッファには内容あり＝コピー可、PTY/エミュは正常）。→ Phase B ゲート「cmd.exe が CRT シェーダー越しに動く」は**未達**。作業ブランチ `windows-port`（draft PR #5）。
+**Phase A〜D 完了 — Windows 実機で CRT ターミナルが完全動作。** Phase A〜C（A1〜C3 全15タスク）実装・CI 完了に加え、実機検証で発覚した D1（Windows 描画バグ群）も 2026-07-21 に全解決。実機（Win11 26200 / RTX 3070 Ti / 3440×1440）で **CRT シェーダー越しに cmd.exe が描画され、タイプ・echo・Backspace・カーソル点滅・flicker/CRT 効果すべて正常動作をユーザー実機目視で確認**。作業ブランチ `windows-port`（draft PR #5）。
 
-**D1 は Codex 調査中**（`tasks/D1-crt-render-windows.md`）。切り分けで PTY/フォント/スクリーン/描画スロットル/低解像度パスは除外済み、有力仮説は QQuickPaintedItem→ShaderEffectSource キャプチャが D3D11 で空。**重大な教訓: Phase B の「実機スモーク」は全てプロセス生存/子プロセス確認どまりで、GUI 描画を誰も目視していなかった**（SSH セッション0はヘッドレスで描画ループ停止＝描画は観測不能）。以後、描画に関わる検証は**必ずユーザーの物理ディスプレイでスクショ目視**する。
+**D1 の顛末（実機物理ディスプレイでのみ観測可能だった描画バグ4件、Codex 調査＋実機ループで解決）**:
+1. CRT 黒画面 = `terminal_dynamic` シェーダーの sampler が binding 0（Qt UBO 予約）と衝突し D3D11 HLSL で register がゴミ化 → binding 1..4 へ是正 + .qsb 再生成（3e6ca5d）
+2. Backspace 全削除 = Windows ConPTY は plain Backspace に 0x7f(DEL) を期待、0x08 は Ctrl+Backspace(単語削除)扱い → Windows 限定で 0x7f 送信（08b7fa0）
+3. カーソル非点滅 = D3D11 RHI では painted item の部分 update() が ShaderEffectSource 再キャプチャを誘発しない → Windows 限定で全体 update()（7819a8e）
+4. (0,0) boot overlay ゴースト = Connections の enabled ゲート起因で消去ハンドラ不発 → ゲート除去 + 安全網 Timer
 
-D1 解決後の残り: release.yml 実行（master マージ or タグ）、draft PR ready 昇格。進捗の正本は TASKS.md。
+**重大な教訓（正本に刻む）**: Phase B の「実機スモーク」は全てプロセス生存/子プロセス確認どまりで、GUI 描画を誰も目視していなかった（SSH セッション0はヘッドレスで描画ループ停止＝描画は観測不能）。だから CI 緑でも実機は真っ黒だった。**以後、描画に関わる検証は必ずユーザーの物理ディスプレイでスクショ目視する**（観測手段: `C:\crt-setup\shot.ps1` スクショ回収、`fileIO.write` ランタイムダンプ、cdb アタッチ）。
+
+残り: ①軽微 cosmetic（terminalSize 桁行入替＝SizeOverlay 表示のみ、未起票）②release.yml 実行（master マージ or タグ）③draft PR #5 ready 昇格。進捗の正本は TASKS.md。
 
 ## 規模感サマリ
 
