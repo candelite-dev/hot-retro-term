@@ -1,6 +1,62 @@
 #include "PtyWin.h"
 
+#include <QThread>
+
 namespace Konsole {
+
+class ConPtyReaderThread : public QThread
+{
+    Q_OBJECT
+
+public:
+    ConPtyReaderThread(HANDLE outRead, QObject *parent)
+        : QThread(parent)
+        , m_h(outRead)
+    {
+    }
+
+signals:
+    void chunk(const QByteArray &data);
+
+protected:
+    void run() override
+    {
+        char buffer[65536];
+        DWORD bytesRead = 0;
+        while (ReadFile(m_h, buffer, sizeof(buffer), &bytesRead, nullptr) && bytesRead > 0)
+            emit chunk(QByteArray(buffer, int(bytesRead)));
+    }
+
+private:
+    HANDLE m_h;
+};
+
+class ConPtyWriter : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit ConPtyWriter(HANDLE inWrite)
+        : m_h(inWrite)
+    {
+    }
+
+public slots:
+    void writeAll(const QByteArray &data)
+    {
+        const char *cursor = data.constData();
+        qint64 bytesLeft = data.size();
+        DWORD bytesWritten = 0;
+        while (bytesLeft > 0
+               && WriteFile(m_h, cursor, DWORD(bytesLeft), &bytesWritten, nullptr)) {
+            cursor += bytesWritten;
+            bytesLeft -= bytesWritten;
+        }
+    }
+
+private:
+    HANDLE m_h;
+};
 
 Pty::Pty(QObject *parent)
     : KProcess(parent)
@@ -37,6 +93,16 @@ int Pty::start(const QString &program, const QStringList &arguments,
         closePty();
         return -1;
     }
+
+    m_reader = new ConPtyReaderThread(m_outRead, this);
+    connect(m_reader, &ConPtyReaderThread::chunk, this, &Pty::onReaderChunk);
+    m_reader->start();
+
+    m_writerThread = new QThread(this);
+    m_writer = new ConPtyWriter(m_inWrite);
+    m_writer->moveToThread(m_writerThread);
+    connect(m_writerThread, &QThread::finished, m_writer, &QObject::deleteLater);
+    m_writerThread->start();
 
     return 0;
 }
@@ -98,12 +164,18 @@ void Pty::closePty()
     }
 }
 
-void Pty::sendData(const char *, int)
+void Pty::sendData(const char *buffer, int length)
 {
+    if (!m_writer)
+        return;
+
+    QMetaObject::invokeMethod(m_writer, "writeAll", Qt::QueuedConnection,
+                              Q_ARG(QByteArray, QByteArray(buffer, length)));
 }
 
-void Pty::onReaderChunk(const QByteArray &)
+void Pty::onReaderChunk(const QByteArray &chunk)
 {
+    emit receivedData(chunk.constData(), chunk.size());
 }
 
 bool Pty::openPseudoConsole()
@@ -180,3 +252,5 @@ void Pty::addEnvironmentVariables(const QStringList &environment)
 }
 
 } // namespace Konsole
+
+#include "PtyWin.moc"
