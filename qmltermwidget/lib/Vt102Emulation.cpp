@@ -1104,7 +1104,14 @@ void Vt102Emulation::sendKeyEvent(QKeyEvent* origEvent, bool fromPaste)
         }
         else if ( !entry.text().isEmpty() )
         {
-            QString str = QString::fromUtf8(entry.text(true,modifiers));
+            QByteArray translatedText = entry.text(true,modifiers);
+#if defined(Q_OS_WIN)
+            // ConPTY uses DEL for plain Backspace.  BS is decoded as
+            // Ctrl+Backspace, which makes cmd.exe erase a whole word.
+            if (event->key() == Qt::Key_Backspace && modifiers == Qt::NoModifier)
+                translatedText = QByteArray(1, '\x7f');
+#endif
+            QString str = QString::fromUtf8(translatedText);
             QByteArray bytes = _toUtf8(str);
             textToSend += bytes;
         }
