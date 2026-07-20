@@ -83,12 +83,51 @@ jobs:
           name: cool-retro-term-dmg
           path: ./release/*
 
+  build-windows:
+    name: Build (Windows, ZIP)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.*'
+          arch: win64_msvc2022_64
+          modules: 'qt5compat qtshadertools'
+          cache: true
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Deploy Qt runtime
+        run: cmake --build build --target deploy_windows
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: cool-retro-term-win64
+          path: ./cool-retro-term-win64.zip
+
   release:
     name: Create Release
     runs-on: ubuntu-22.04
     needs:
       - build-appimage
       - build-dmg
+      - build-windows
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,6 +143,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cool-retro-term-dmg
+          path: ./release
+
+      - name: Download Windows ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: cool-retro-term-win64
           path: ./release
 
       - name: Update rolling tag
