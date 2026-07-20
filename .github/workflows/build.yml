@@ -102,3 +102,20 @@ jobs:
         run: |
           if (!(Test-Path build\cool-retro-term.exe)) { throw "exe missing" }
           if (!(Test-Path build\qmltermwidget\QMLTermWidget\qmltermwidget.dll)) { throw "plugin dll missing" }
+
+      - name: Deploy Qt runtime
+        run: cmake --build build --target deploy_windows
+
+      - name: Smoke test - launch and stay alive
+        shell: pwsh
+        run: |
+          $p = Start-Process build\cool-retro-term.exe -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) { throw "exited early with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+
+      - name: Upload staged build
+        uses: actions/upload-artifact@v4
+        with:
+          name: cool-retro-term-windows-staging
+          path: build/

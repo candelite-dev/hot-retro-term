@@ -69,6 +69,17 @@ if(WIN32)
     enable_language(RC)
     set_target_properties(cool-retro-term PROPERTIES WIN32_EXECUTABLE TRUE)
     target_sources(cool-retro-term PRIVATE icons/crt.rc)
+
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/../../../bin")
+    add_custom_target(deploy_windows
+        COMMAND ${WINDEPLOYQT_EXECUTABLE} --release
+                --qmldir ${CMAKE_CURRENT_SOURCE_DIR}/qml
+                --qmldir ${CMAKE_SOURCE_DIR}/qmltermwidget/src
+                $<TARGET_FILE:cool-retro-term>
+        COMMAND ${WINDEPLOYQT_EXECUTABLE} --release --no-translations
+                --dir ${CMAKE_BINARY_DIR}
+                ${CMAKE_BINARY_DIR}/qmltermwidget/QMLTermWidget/qmltermwidget.dll
+        COMMENT "windeployqt: staging Qt runtime next to the exe")
 endif()
 
 # QMLTermWidget is loaded at runtime via QML import path, not linked.
