@@ -58,3 +58,219 @@ Codex は盲目実装せず、以下の順で進める。1往復で最大の情�
 - [ ] 2ペイン単純split、4ペイン（グリッド）等、他の分割構成でも同様に無退行を確認
 - [ ] イベントビューアーに `0xC0000005` / `nvwgf2umx.dll` の再発が無いことを確認
 - [ ] mac/Linux でCRT/split機能に無退行
+
+## 2026-07-25 Codex 静的再調査（実機での検証待ち）
+
+### 仮説判定と優先順位
+
+1. **D3D11 RHI / ShaderEffectSource 経路の脆さ — supported（優先度1）**
+   Split時は `needsUnifiedCRT` が真になり（`SplitTreeModel.qml:43-48`）、`crtContent` 全体を
+   `unifiedPaneSource` が live capture し、その出力を `unifiedCRT` が受ける
+   （`PaneLayout.qml:172-205`）。後段は `dynamicShader`、`staticShader`、
+   `frameBuffer`、任意のframe/bloom用 `ShaderEffectSource` を持つ
+   （`ShaderTerminal.qml:58-195`）。さらに D1 で Windows の部分更新だけ
+   ShaderEffectSource 再キャプチャを誘発しなかった既知差分が残る
+   （`TerminalDisplay.cpp:2034-2046`）。したがってフォールティングモジュールが
+   `nvwgf2umx.dll` である事実と最も整合する。ただし今回のAVの因果はダンプ未取得のため
+   **実機での検証待ち**。
+2. **unifiedPaneSource 等がリサイズごとに全体再生成 — inconclusive（優先度2）**
+   `crtContent` は親をfillし（`PaneLayout.qml:64-66`）、`unifiedPaneSource.live` と
+   `unifiedCRT` の全面anchors、`staticShader.width/height` がウィンドウ寸法に追随する
+   （`PaneLayout.qml:172-209`, `ShaderTerminal.qml:158-195`）ため、フレームに取り込まれた
+   サイズ変更では複数の全面テクスチャが関与する。一方、実際に各Windowsサイズイベント
+   ごとに全GPU資源が破棄・再生成されるかはQt RHI内部でありコードからは確定できない。
+   また `_paneRects` のbindingはtreeだけに依存し（`PaneLayout.qml:54-57`）、
+   `computePaneRects()` 自体はウィンドウ寸法を読まない（`SplitTreeModel.qml:275-317`）。
+   よって「`[RECT]` がリサイズtickごとに出る」という初期推測は **refuted**。
+3. **アプリ側にリサイズのデバウンス/コアレスが無い — supported（優先度3）**
+   QMLはwidth/height変更のたび直接 `kterminal.update()` を要求する
+   （`PreprocessedTerminal.qml:105-119`）。C++もgeometry変更ごとに
+   `resizeEvent()` と `update()` を呼び（`TerminalDisplay.cpp:3768-3775`）、
+   文字画像を再確保・コピー・解放する（同`:2081-2114`）。行列数が変わればSessionから
+   `ResizePseudoConsole()` まで同期的に到達する（`Session.cpp:485-522`,
+   `PtyWin.cpp:132-137`）。ただし `QQuickPaintedItem::update()` は即時paintでなく次frameへの
+   scheduleであり、Qt側のframe単位コアレスはある。従って無条件Timer追加より先に、
+   優先度1のバイパス比較とダンプ取得を行う。
+4. **paneSlot / unified source の最小サイズガード欠如がゼロ寸法を踏む — inconclusive（優先度4）**
+   元コードのpaneSlotは丸め値をそのまま使い、unified sourceにも有効寸法条件が無かった
+   （今回の `PaneLayout.qml:37-38,121-126,172-202` のWindows限定ガードが追加差分）。
+   ただしkterminal側は既に1px下限（`PreprocessedTerminal.qml:130-136`）、C++の端末行列も
+   1x1下限（`TerminalDisplay.cpp:3486-3495`）、Sessionは2行2列未満をConPTYへ送らない
+   （`Session.cpp:501-521`）。komorebiが実際に0pxを通知した証跡もまだ無いので、
+   直接原因とは確定できず **実機での検証待ち**。
+5. **GUIスレッドがRenderThreadを追い越すアプリ起因レース — refuted（優先度5）**
+   アプリはrender loopを強制せず（`app/main.cpp:43-52`）、独自のscene graph同期処理や
+   native graphics commandも持たない。Qtのthreaded render loopは同期フェーズでGUI threadを
+   blockし、`QQuickPaintedItem::paint()` 中もGUI threadをblockする契約なので、
+   コードから「GUIが追い越して解放済み資源を直接触る」経路は見つからない。
+   Qt RHIまたはNVIDIAドライバ内部のレースまでは否定できないため、これはダンプの
+   render-thread stackで再評価する。
+
+補足: `TerminalDisplay.cpp:484-486` は `FramebufferObject` を指定するが、Qt 6.9以降は
+OpenGL以外ではこの指定が無視される公式仕様である。Qt 6.10/D3D11上のkterminalを
+「ハードウェアFBOそのもの」とみなす初期推測は不正確。ただしQImageからGPU textureへの
+uploadと、その後のShaderEffectSource captureは残る。
+
+- Qt公式: <https://doc.qt.io/qt-6/qquickpainteditem.html>
+- Qt公式: <https://doc.qt.io/qt-6/qml-qtquick-shadereffectsource.html>
+- Qt公式: <https://doc.qt.io/qt-6/qtquick-visualcanvas-scenegraph.html>
+
+### Working tree の切り分け実験と候補修正
+
+- `PaneLayout.qml:32-38` の `_d3BypassUnifiedCRT` はWindowsでだけtrueになる一時実験フラグ。
+- Windowsでは `unifiedPaneSource.sourceItem=null`、`live/hideSource=false` とし、
+  `unifiedCRT.splitActive=true` で `ShaderTerminal.Loader` をアンロードする。
+  unified burn-in/bloomも停止する。split中の各paneは既存の
+  `PreprocessedTerminal.qml:443-455` の直接描画経路で生kterminalを表示する。
+- `paneSlot` をWindowsのみ1px以上にし、unified source寸法が1px未満ならcapture chainを
+  切り離す。POSIX側は元の式・有効条件のまま。
+- `SplitTreeModel.qml:275-282` の `[RECT]` はリサイズhot pathではなかったが、
+  Windowsだけ出力を止めた。POSIXの診断出力は維持。
+- この実験でクラッシュしなければ unified ShaderEffectSource / ShaderTerminal chain が
+  濃厚。クラッシュすれば、生kterminalのtexture upload、TerminalDisplayのCPU再確保、
+  ConPTY resize、または別のwindow-level effectを次に切り分ける。いずれも
+  **実機での検証待ち**。
+
+### WER LocalDumps（推奨、管理者PowerShell）
+
+Microsoft公式仕様では `DumpType=2` がfull dump、per-process keyがglobal設定より優先される。
+物理ログオン中の **管理者PowerShell** で以下をそのまま実行する。
+
+```powershell
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$dumpDir = 'C:\crt-setup\dumps'
+$werKey = 'HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\cool-retro-term.exe'
+
+New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+reg.exe add $werKey /v DumpFolder /t REG_EXPAND_SZ /d $dumpDir /f
+if ($LASTEXITCODE -ne 0) { throw 'DumpFolder registry setup failed' }
+reg.exe add $werKey /v DumpType /t REG_DWORD /d 2 /f
+if ($LASTEXITCODE -ne 0) { throw 'DumpType registry setup failed' }
+reg.exe add $werKey /v DumpCount /t REG_DWORD /d 10 /f
+if ($LASTEXITCODE -ne 0) { throw 'DumpCount registry setup failed' }
+reg.exe query $werKey
+```
+
+次にD3差分を配置済みのtreeを、同じ物理ログオンのPowerShellでビルド・起動する。
+
+```powershell
+Get-Process cool-retro-term -ErrorAction SilentlyContinue | Stop-Process -Force
+(Get-Item 'C:\crt\src\app\qml\resources.qrc').LastWriteTime = Get-Date
+& 'C:\crt-setup\build.cmd'
+if ($LASTEXITCODE -ne 0) { throw 'build.cmd failed' }
+
+$env:QSG_INFO = '1'
+$env:QT_LOGGING_RULES = 'qt.rhi.*=true;qt.scenegraph.general=true;qt.scenegraph.time.renderloop=true'
+$stdout = 'C:\crt-setup\d3-stdout.txt'
+$stderr = 'C:\crt-setup\d3-stderr.txt'
+$p = Start-Process -FilePath 'C:\crt\src\build\cool-retro-term.exe' `
+    -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+$p.Id
+```
+
+画面上で左右分割→右を上下分割し、komorebiの連続リタイルを5分または50回相当実行する。
+クラッシュ後（または試験終了後）:
+
+```powershell
+Get-ChildItem 'C:\crt-setup\dumps' -Filter '*.dmp' |
+    Sort-Object LastWriteTime -Descending |
+    Format-Table LastWriteTime, Length, FullName -AutoSize
+Get-WinEvent -FilterHashtable @{ LogName='Application'; StartTime=(Get-Date).AddMinutes(-30) } |
+    Where-Object { $_.Message -match 'cool-retro-term|nvwgf2umx|0xc0000005' } |
+    Select-Object TimeCreated, Id, ProviderName, Message |
+    Format-List | Out-File 'C:\crt-setup\d3-eventlog.txt' -Width 400
+Compress-Archive -Path 'C:\crt-setup\dumps\*' `
+    -DestinationPath 'C:\crt-setup\d3-dumps.zip' -Force
+```
+
+WER設定を試験後に戻す場合だけ、管理者PowerShellで:
+
+```powershell
+reg.exe delete 'HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\cool-retro-term.exe' /f
+```
+
+- Microsoft公式: <https://learn.microsoft.com/windows/win32/wer/wer-settings>
+
+### cdb で直接捕捉する代替手順
+
+Windows SDKのDebugging Tools for Windowsが導入済みであることを前提とする。まず通常起動し、
+同じ物理ログオンのPowerShellでattachする。
+
+```powershell
+$cdb = "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe"
+if (-not (Test-Path $cdb)) { throw "cdb.exe not found: $cdb" }
+$proc = Get-Process cool-retro-term -ErrorAction Stop | Select-Object -First 1
+New-Item -ItemType Directory -Force -Path 'C:\symbols','C:\crt-setup\dumps' | Out-Null
+& $cdb -p $proc.Id -lines `
+    -y 'srv*C:\symbols*https://msdl.microsoft.com/download/symbols' `
+    -logo 'C:\crt-setup\d3-cdb.txt'
+```
+
+cdb promptが出たら以下を1行ずつ実行し、`g` 後に画面上で再現する。
+
+```text
+.symfix C:\symbols
+.sympath+ C:\crt\src\build
+.reload /f
+sxe av
+g
+```
+
+AVで停止したら、**再度 `g` は実行せず**次を1行ずつ実行する。
+
+```text
+.ecxr
+!analyze -v
+kP
+~* kP
+lmvm nvwgf2umx
+.dump /ma /u C:\crt-setup\dumps\d3-cdb.dmp
+q
+```
+
+WER dumpを後から解析する場合は、最新dumpを指定して:
+
+```powershell
+$cdb = "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe"
+$dump = Get-ChildItem 'C:\crt-setup\dumps' -Filter '*.dmp' |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+& $cdb -z $dump.FullName `
+    -y 'srv*C:\symbols*https://msdl.microsoft.com/download/symbols' `
+    -c '.ecxr;!analyze -v;kP;~* kP;lmvm nvwgf2umx;q' |
+    Tee-Object -FilePath 'C:\crt-setup\d3-dump-analysis.txt'
+```
+
+- Microsoft公式: <https://learn.microsoft.com/windows-hardware/drivers/debugger/debugging-a-user-mode-process-using-cdb>
+- Microsoft公式: <https://learn.microsoft.com/windows-hardware/drivers/debugger/controlling-exceptions-and-events>
+- Microsoft公式: <https://learn.microsoft.com/windows-hardware/drivers/debuggercmds/-dump--create-dump-file->
+
+### 任意: komorebiなしのSetWindowPos連打
+
+主試験は既知再現条件のkomorebiを優先する。補助的に、物理ログオンの別PowerShellから:
+
+```powershell
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class D3WindowStorm {
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern bool SetWindowPos(
+        IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+}
+'@
+$hwnd = (Get-Process cool-retro-term -ErrorAction Stop |
+    Where-Object MainWindowHandle -ne 0 |
+    Select-Object -First 1).MainWindowHandle
+if ($hwnd -eq 0) { throw 'cool-retro-term window not found' }
+for ($i = 0; $i -lt 2000; $i++) {
+    $widthPx = if (($i % 2) -eq 0) { 1500 } else { 900 }
+    $heightPx = if (($i % 3) -eq 0) { 950 } else { 620 }
+    [void][D3WindowStorm]::SetWindowPos(
+        $hwnd, [IntPtr]::Zero, 100, 100, $widthPx, $heightPx, 0x0014)
+    Start-Sleep -Milliseconds 5
+}
+```
+
+どの手順も、このmacOSホスト上では実行・確認していない。結果はすべて
+**Windows実機での検証待ち**。
