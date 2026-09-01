@@ -63,3 +63,7 @@ build
 # IDE
 
 .idea/
+
+# Tool caches/configs (JetBrains junie, Codex CLI)
+.cache/
+.codex/
