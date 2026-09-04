@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QColor>
 #include <QObject>
 
 class QWindow;
@@ -15,5 +16,11 @@ class MacWindowHelper : public QObject
 public:
     using QObject::QObject;
 
-    Q_INVOKABLE void makeTranslucent(QWindow *window);
+    // Tints the native titlebar to match the CRT's own background pixels
+    // (see terminal_dynamic.frag's convertWithChroma) so the titlebar and
+    // the CRT content fade together as windowOpacity changes. At alpha
+    // 1.0 the titlebar is restored to the stock macOS look instead of
+    // being painted flat, so full opacity doesn't look like a different
+    // window style. Safe to call repeatedly (e.g. on every slider tick).
+    Q_INVOKABLE void applyWindowChrome(QWindow *window, const QColor &bg, qreal alpha);
 };

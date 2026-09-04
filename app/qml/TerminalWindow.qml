@@ -38,16 +38,38 @@ ApplicationWindow {
     onFullscreenChanged: visibility = (fullscreen ? Window.FullScreen : Window.Windowed)
 
     // Keeps appRoot.anyWindowVisible current so the render loop can stop
-    // while every window is minimized or hidden.
-    onVisibilityChanged: appRoot.recomputeWindowVisibility()
+    // while every window is minimized or hidden. Also re-applies the native
+    // titlebar tint below, since a fullscreen round-trip changes visibility
+    // without firing onVisibleChanged.
+    onVisibilityChanged: {
+        appRoot.recomputeWindowVisibility()
+        Qt.callLater(_applyMacChrome)
+    }
 
     // Qt's alpha-buffered surface format isn't enough on macOS — the NSWindow
     // itself still reports opaque to the compositor. Flip it natively once
-    // the native window exists (i.e. once shown).
-    onVisibleChanged: {
-        if (visible && appSettings.isMacOS) {
-            Qt.callLater(function() { macWindowHelper.makeTranslucent(terminalWindow) })
-        }
+    // the native window exists (i.e. once shown), and keep the titlebar's
+    // tint following windowOpacity/backgroundColor from then on (see the
+    // Connections block below).
+    onVisibleChanged: Qt.callLater(_applyMacChrome)
+
+    // Re-reads both appSettings values fresh rather than taking them as
+    // signal arguments — a profile load sets windowOpacity and
+    // backgroundColor in sequence, so an argument-based call could fire
+    // with a transiently mismatched pair. Guarded internally so every call
+    // site can be unconditional; macWindowHelper only exists on macOS.
+    function _applyMacChrome() {
+        if (!appSettings.isMacOS || !visible)
+            return
+        macWindowHelper.applyWindowChrome(terminalWindow,
+                                           appSettings.backgroundColor,
+                                           appSettings.windowOpacity)
+    }
+
+    Connections {
+        target: appSettings
+        function onWindowOpacityChanged() { terminalWindow._applyMacChrome() }
+        function onBackgroundColorChanged() { terminalWindow._applyMacChrome() }
     }
 
     menuBar: WindowMenu { }
