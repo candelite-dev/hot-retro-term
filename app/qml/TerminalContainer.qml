@@ -38,8 +38,10 @@ ShaderTerminal {
     property bool loadBloomEffect: (appSettings.bloom > 0 || appSettings._frameShininess > 0) && !splitActive
 
     id: mainShader
-    opacity: splitActive ? 1.0 : (appSettings.windowOpacity * 0.3 + 0.7)
 
+    // windowOpacity now drives real per-pixel window alpha (see
+    // terminal_dynamic.frag's windowAlpha uniform) instead of fading
+    // this item toward the opaque window background.
     source: terminal.mainSource
     burnInEffect: terminal.burnInEffect
     virtualResolution: terminal.virtualResolution

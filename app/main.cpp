@@ -9,7 +9,9 @@
 #include <QtWidgets/QApplication>
 #include <QIcon>
 #include <QQuickStyle>
+#include <QQuickWindow>
 #include <QtQml/qqml.h>
+#include <QSurfaceFormat>
 
 #include <kdsingleapplication.h>
 
@@ -27,6 +29,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <QStyleFactory>
 #include <QMenu>
+#include <macwindow.h>
 #endif
 
 QString getNamedArgument(QStringList args, QString name, QString defaultName)
@@ -46,6 +49,19 @@ int main(int argc, char *argv[])
     // Disable Connections slot warnings
     QLoggingCategory::setFilterRules("qt.qml.connections.warning=false");
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::Round);
+
+    // Reserve an alpha channel on the default surface format so the CRT
+    // shader's per-pixel alpha (ApplicationSettings.windowOpacity) reaches
+    // the window compositor instead of being discarded as opaque. Must be
+    // set before QApplication is constructed — later is a silent no-op.
+    QSurfaceFormat translucentFormat = QSurfaceFormat::defaultFormat();
+    translucentFormat.setAlphaBufferSize(8);
+    QSurfaceFormat::setDefaultFormat(translucentFormat);
+
+    // Also required: without this, Qt Quick's scene graph allocates its
+    // render targets without an alpha channel regardless of the surface
+    // format above, and the compositor never sees per-pixel transparency.
+    QQuickWindow::setDefaultAlphaBuffer(true);
 
 // #if defined (Q_OS_LINUX)
 //     setenv("QSG_RENDER_LOOP", "threaded", 0);
@@ -131,6 +147,11 @@ int main(int argc, char *argv[])
 
     engine.rootContext()->setContextProperty("workdir", getNamedArgument(args, "--workdir", QDir::currentPath()));
     engine.rootContext()->setContextProperty("fileIO", &fileIO);
+
+#if defined(Q_OS_MAC)
+    MacWindowHelper macWindowHelper;
+    engine.rootContext()->setContextProperty("macWindowHelper", &macWindowHelper);
+#endif
 
     // Manage import paths for Linux and OSX.
     QStringList importPathList = engine.importPathList();

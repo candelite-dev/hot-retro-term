@@ -104,6 +104,7 @@ Item {
                 property real frameShininess: appSettings.frameShininess
                 property real frameActive: terminalFrameLoader.active ? 1.0 : 0.0
                 property real bloom: shaderRoot.bloomSource ? appSettings.bloom * 2.5 : 0
+                property real windowAlpha: appSettings.windowOpacity
 
                 anchors.fill: parent
                 blending: false

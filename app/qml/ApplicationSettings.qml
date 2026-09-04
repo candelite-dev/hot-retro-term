@@ -60,6 +60,10 @@ QtObject {
 
 
     // PROFILE SETTINGS ///////////////////////////////////////////////////////
+    // Real per-pixel window alpha (requires the RGBA surface format set in
+    // main.cpp). Below 1.0, desktop content shows through the whole window;
+    // on compositors that blur translucent surfaces (e.g. Hyprland, KWin)
+    // this is enough to trigger their blur — no protocol code needed here.
     property real windowOpacity: 1.0
     property real ambientLight: 0.2
     property real contrast: 0.80

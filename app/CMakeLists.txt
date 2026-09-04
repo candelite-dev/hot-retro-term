@@ -58,11 +58,11 @@ if(APPLE)
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_ICON_FILE crt.icns
     )
-    target_sources(cool-retro-term PRIVATE icons/crt.icns)
+    target_sources(cool-retro-term PRIVATE icons/crt.icns macwindow.mm macwindow.h)
     set_source_files_properties(icons/crt.icns PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources"
     )
-    target_link_libraries(cool-retro-term PRIVATE "-framework CoreFoundation")
+    target_link_libraries(cool-retro-term PRIVATE "-framework CoreFoundation" "-framework AppKit")
 endif()
 
 # QMLTermWidget is loaded at runtime via QML import path, not linked.

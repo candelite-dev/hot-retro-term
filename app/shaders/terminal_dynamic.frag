@@ -33,6 +33,7 @@ layout(std140, binding = 0) uniform ubuf {
     float bloom;
     int rasterMode;
     float frameActive;
+    float windowAlpha;
 };
 
 layout(binding = 0) uniform sampler2D noiseSource;
@@ -105,14 +106,24 @@ float randomPass(vec2 coords){
     return fract(smoothstep(-120.0, 0.0, coords.y - (virtualResolution.y + 120.0) * fract(time * 0.15)));
 }
 
-vec3 convertWithChroma(vec3 inColor) {
+// Returns premultiplied (rgb * alpha, alpha). The background end fades with
+// windowAlpha (glass); the text end stays fully opaque so glyphs stay crisp
+// through the window regardless of windowOpacity. `grey`, the existing
+// text-vs-background mask this function already computed, is reused as the
+// mix weight — interpolating in premultiplied space keeps rgb and alpha
+// consistent with no extra fringe pass.
+vec4 convertWithChroma(vec3 inColor) {
+    float grey = rgb2grey(inColor);
+    vec4 bg = vec4(backgroundColor.rgb * windowAlpha, windowAlpha);
+    vec4 fg;
     if (chromaColor > 0.0) {
-        float grey = rgb2grey(inColor);
         float denom = max(grey, 0.0001);
         vec3 foregroundColor = mix(fontColor.rgb, inColor * fontColor.rgb / denom, chromaColor);
-        return mix(backgroundColor.rgb, foregroundColor, grey);
+        fg = vec4(foregroundColor, 1.0);
+    } else {
+        fg = vec4(fontColor.rgb, 1.0);
     }
-    return mix(backgroundColor.rgb, fontColor.rgb, rgb2grey(inColor));
+    return mix(bg, fg, grey);
 }
 
 void main() {
@@ -160,11 +171,17 @@ void main() {
     txt_color += vec3(color);
     txt_color = applyRasterization(staticCoords, txt_color, virtualResolution, rasterizationIntensity);
 
-    vec3 finalColor = convertWithChroma(txt_color);
+    vec4 finalColorA = convertWithChroma(txt_color);
     float brightness = mix(1.0, vBrightness, step(0.0, flickering));
-    finalColor *= brightness;
+    finalColorA.rgb *= brightness;
 
-    finalColor = mix(finalColor, frameColor.rgb, frameColor.a);
+    // The bezel frame is opaque set dressing, never desktop-revealing glass —
+    // force alpha to 1 wherever it's drawn.
+    vec3 finalRGB = mix(finalColorA.rgb, frameColor.rgb, frameColor.a);
+    float totalAlpha = mix(finalColorA.a, 1.0, frameColor.a);
 
-    fragColor = vec4(finalColor, qt_Opacity);
+    // Premultiplied alpha: the window surface has an alpha channel
+    // (see main.cpp), and compositors expect rgb already scaled by the
+    // pixel's own alpha for correct blending against desktop content.
+    fragColor = vec4(finalRGB * qt_Opacity, totalAlpha * qt_Opacity);
 }

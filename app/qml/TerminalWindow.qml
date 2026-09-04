@@ -41,11 +41,26 @@ ApplicationWindow {
     // while every window is minimized or hidden.
     onVisibilityChanged: appRoot.recomputeWindowVisibility()
 
+    // Qt's alpha-buffered surface format isn't enough on macOS — the NSWindow
+    // itself still reports opaque to the compositor. Flip it natively once
+    // the native window exists (i.e. once shown).
+    onVisibleChanged: {
+        if (visible && appSettings.isMacOS) {
+            Qt.callLater(function() { macWindowHelper.makeTranslucent(terminalWindow) })
+        }
+    }
+
     menuBar: WindowMenu { }
 
     property real normalizedWindowScale: 1024 / ((0.5 * width + 0.5 * height))
 
     color: "#00000000"
+
+    // Fusion style's default ApplicationWindow background is an opaque
+    // Rectangle filled with palette.window — it paints under the CRT
+    // content and defeats per-pixel window alpha even though `color`
+    // above is transparent.
+    background: null
 
     title: terminalTabs.currentTitle
 
