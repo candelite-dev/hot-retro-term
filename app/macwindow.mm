@@ -4,7 +4,20 @@
 
 #import <AppKit/AppKit.h>
 
-void MacWindowHelper::applyWindowChrome(QWindow *window, const QColor &bg, qreal alpha)
+// CGSSetWindowBackgroundBlurRadius is a private WindowServer API (part of
+// "CoreGraphics Services", not exposed in any public header) — it's what
+// Dock/Spotlight/Notification Center use for behind-window blur. Adopted
+// here (confirmed with the user first, see CLAUDE.md's "Private APIs"
+// section) because the public alternative, NSVisualEffectView, only offers
+// a handful of fixed material presets — it has no API for a continuously
+// adjustable blur radius, which is what a user-facing slider needs. Ghostty
+// uses the same call (src/apprt/embedded.zig, ghostty_set_window_background_blur).
+extern "C" {
+    void *CGSDefaultConnectionForThread(void);
+    int CGSSetWindowBackgroundBlurRadius(void *cid, NSInteger windowNumber, int radius);
+}
+
+void MacWindowHelper::applyWindowChrome(QWindow *window, const QColor &bg, qreal alpha, int blurRadius)
 {
     // handle() is present only once the native window has actually been
     // created. winId() would force-create it, which is wrong to do from a
@@ -21,10 +34,11 @@ void MacWindowHelper::applyWindowChrome(QWindow *window, const QColor &bg, qreal
 
     // The content view stays translucent (this is what lets the CRT
     // shader's own per-pixel alpha show the desktop through the
-    // background) — only the titlebar strip's appearance changes here.
-    // Deliberately never sets NSFullSizeContentViewWindowMask: that would
-    // move the content view under the titlebar and defeat the mechanism
-    // this relies on (the titlebar revealing NSWindow.backgroundColor).
+    // background) — only the titlebar strip's appearance and the
+    // WindowServer blur radius change here. Deliberately never sets
+    // NSFullSizeContentViewWindowMask: that would move the content view
+    // under the titlebar and defeat the mechanism this relies on (the
+    // titlebar revealing NSWindow.backgroundColor).
     nsWindow.opaque = NO;
 
     if (alpha < 1.0) {
@@ -43,4 +57,7 @@ void MacWindowHelper::applyWindowChrome(QWindow *window, const QColor &bg, qreal
         nsWindow.titlebarAppearsTransparent = NO;
         nsWindow.backgroundColor = [NSColor windowBackgroundColor];
     }
+
+    int radius = (alpha < 1.0) ? qMax(0, blurRadius) : 0;
+    CGSSetWindowBackgroundBlurRadius(CGSDefaultConnectionForThread(), nsWindow.windowNumber, radius);
 }

@@ -65,6 +65,9 @@ QtObject {
     // on compositors that blur translucent surfaces (e.g. Hyprland, KWin)
     // this is enough to trigger their blur — no protocol code needed here.
     property real windowOpacity: 1.0
+    // Behind-window blur radius in points (macOS only, 0 disables it).
+    // Only takes effect while windowOpacity < 1 — see macwindow.mm.
+    property int backgroundBlurRadius: 20
     property real ambientLight: 0.2
     property real contrast: 0.80
     property real brightness: 0.5

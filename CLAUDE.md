@@ -81,6 +81,10 @@ Variants are selected at runtime based on `ApplicationSettings` property values.
 - `ShaderEffectSource.hideSource: true` on a nested source doesn't suppress rendering reliably; use `visible: false` + `anchors.fill: parent` instead
 - `splitInputOverlay` (MouseArea, z:3) intercepts all events when unified CRT is active and forwards to correct terminal via `_getPaneAt()`/`_toKCoords()`
 
+## Private APIs
+
+Using an undocumented/private OS API (e.g. macOS `CGSSetWindowBackgroundBlurRadius`) is allowed when it gives a clear enough benefit — meaningfully simpler implementation, a capability with no public equivalent, etc. — but confirm with the user first before writing code that depends on one, and note in a comment near the call site why the public API wasn't sufficient.
+
 ## Settings Pattern
 
 - Adding a setting requires 3 steps: declare property in `ApplicationSettings.qml`, add to `composeSettingsString()`, parse in `loadSettingsString()`

@@ -35,6 +35,7 @@ var schema = [
     { k: "contrast",          p: "contrast",          scope: "profile"  },
     { k: "ambientLight",      p: "ambientLight",      scope: "profile"  },
     { k: "windowOpacity",     p: "windowOpacity",     scope: "profile"  },
+    { k: "backgroundBlurRadius", p: "backgroundBlurRadius", scope: "profile"  },
     { k: "fontName",          p: "fontName",          scope: "profile"  },
     { k: "fontSource",        p: "fontSource",        scope: "profile"  },
     { k: "fontWidth",         p: "fontWidth",         scope: "profile"  },

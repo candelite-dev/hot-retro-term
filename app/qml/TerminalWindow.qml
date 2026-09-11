@@ -63,13 +63,15 @@ ApplicationWindow {
             return
         macWindowHelper.applyWindowChrome(terminalWindow,
                                            appSettings.backgroundColor,
-                                           appSettings.windowOpacity)
+                                           appSettings.windowOpacity,
+                                           appSettings.backgroundBlurRadius)
     }
 
     Connections {
         target: appSettings
         function onWindowOpacityChanged() { terminalWindow._applyMacChrome() }
         function onBackgroundColorChanged() { terminalWindow._applyMacChrome() }
+        function onBackgroundBlurRadiusChanged() { terminalWindow._applyMacChrome() }
     }
 
     menuBar: WindowMenu { }

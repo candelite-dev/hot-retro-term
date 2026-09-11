@@ -235,6 +235,27 @@ ColumnLayout {
                 value: appSettings.windowOpacity
             }
             Label {
+                text: qsTr("Background Blur")
+                visible: appSettings.isMacOS
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                visible: appSettings.isMacOS
+                Slider {
+                    id: backgroundBlurSlider
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 100
+                    stepSize: 1
+                    onValueChanged: appSettings.backgroundBlurRadius = value
+                    value: appSettings.backgroundBlurRadius
+                }
+                SizedLabel {
+                    text: Math.round(backgroundBlurSlider.value)
+                }
+            }
+            Label {
                 text: qsTr("Window Curvature")
             }
             SimpleSlider {
