@@ -29,8 +29,7 @@ import "utils.js" as Utils
 Item{
     id: terminalContainer
     signal sessionFinished()
-    signal tabClicked(int index)
-    signal addTabClicked()
+    signal paneClicked()
 
     property size virtualResolution: Qt.size(kterminal.totalWidth, kterminal.totalHeight)
     property alias mainTerminal: kterminal
@@ -43,13 +42,18 @@ Item{
     property alias title: ksession.title
     property alias kterminal: kterminal
     property bool isActive: false
+    onIsActiveChanged: {
+        if (!isActive && commandPalette.isOpen) commandPalette.close()
+    }
 
     property size terminalSize: kterminal.terminalSize
     property size fontMetrics: kterminal.fontMetrics
 
-    property int tabCount: 0
-    property int activeTabIndex: 0
-    property var tabTitles: []
+    property bool showDividerRight: false
+    property bool showDividerBottom: false
+    property bool splitActive: false
+    property bool isSplitLayout: false
+    property int paneId: -1
 
     // Manage copy and paste
     Connections {
@@ -68,6 +72,21 @@ Item{
             if (terminalContainer.isActive) {
                 kterminal.pasteClipboard()
             }
+        }
+    }
+    Connections {
+        target: commandPaletteAction
+
+        onTriggered: {
+            if (terminalContainer.isActive) {
+                commandPalette.toggle()
+            }
+        }
+    }
+    Connections {
+        target: kterminal
+        function onUrlActivated(url) {
+            Qt.openUrlExternally(url)
         }
     }
 
@@ -103,17 +122,23 @@ Item{
         id: kterminal
 
         property int textureResolutionScale: appSettings.lowResolutionFont ? Screen.devicePixelRatio : 1
-        property int margin: appSettings.margin / screenScaling
-        property int totalWidth: Math.floor(parent.width / (screenScaling * fontWidth))
+        property int margin: terminalContainer.splitActive ? 0 : appSettings.margin / screenScaling
+        property int totalWidth: Math.floor(parent.width / screenScaling)
         property int totalHeight: Math.floor(parent.height / screenScaling)
+        property bool sessionStarted: false
 
-        property int rawWidth: totalWidth - 2 * margin
-        property int rawHeight: totalHeight - 2 * margin
+        property int rawWidth: Math.max(1, totalWidth - 2 * margin)
+        property int rawHeight: Math.max(1, totalHeight - 2 * margin)
 
         textureSize: Qt.size(width / textureResolutionScale, height / textureResolutionScale)
 
         width: ensureMultiple(rawWidth, Screen.devicePixelRatio)
         height: ensureMultiple(rawHeight, Screen.devicePixelRatio)
+
+        // In split mode kterminal renders directly (no FBO stretch pass), but the item
+        // is sized at 1/screenScaling — scale it back up to fill the pane.
+        transformOrigin: Item.TopLeft
+        scale: terminalContainer.splitActive ? screenScaling : 1
 
         /** Ensure size is a multiple of factor. This is needed for pixel perfect scaling on highdpi screens. */
         function ensureMultiple(size, factor) {
@@ -147,19 +172,119 @@ Item{
             }
         }
 
-        AsciiTabBar {
-            id: asciiTabBar
-            x: 0
+        AsciiDivider {
+            id: rightDivider
+            visible: terminalContainer.showDividerRight
+            orientation: Qt.Horizontal
+            anchors.right: parent.right
             y: 0
-            width: kterminal.width
-            height: kterminal.fontMetrics.height
-            tabCount: terminalContainer.tabCount
-            activeTabIndex: terminalContainer.activeTabIndex
-            tabTitles: terminalContainer.tabTitles
+            width: kterminal.fontMetrics.width
+            height: kterminal.height
             fontColor: appSettings.fontColor
             backgroundColor: appSettings.backgroundColor
             charMetrics: kterminal.fontMetrics
             termFont: kterminal.font
+            z: 10
+        }
+
+        AsciiDivider {
+            id: bottomDivider
+            visible: terminalContainer.showDividerBottom
+            orientation: Qt.Vertical
+            anchors.bottom: parent.bottom
+            x: 0
+            width: kterminal.width
+            height: kterminal.fontMetrics.height
+            fontColor: appSettings.fontColor
+            backgroundColor: appSettings.backgroundColor
+            charMetrics: kterminal.fontMetrics
+            termFont: kterminal.font
+            z: 10
+        }
+
+        AsciiFocusBorder {
+            anchors.fill: parent
+            visible: terminalContainer.isActive && terminalContainer.isSplitLayout
+            fontColor: appSettings.fontColor
+            charMetrics: kterminal.fontMetrics
+            termFont: kterminal.font
+            opacity: 0.6
+            z: 12
+        }
+
+        CommandPalette {
+            id: commandPalette
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: kterminal.fontMetrics.height * 3
+            width: Math.min(paletteWidthChars * kterminal.fontMetrics.width, kterminal.width)
+            fontColor: appSettings.fontColor
+            backgroundColor: appSettings.backgroundColor
+            charMetrics: kterminal.fontMetrics
+            termFont: kterminal.font
+
+            onCommandTriggered: function(actionId) {
+                var actions = {
+                    "newWindow":  newWindowAction,
+                    "newTab":     newTabAction,
+                    "closeTab":   closeTabAction,
+                    "copy":       copyAction,
+                    "paste":      pasteAction,
+                    "fullscreen": fullscreenAction,
+                    "settings":   showsettingsAction,
+                    "zoomIn":     zoomIn,
+                    "zoomOut":    zoomOut,
+                    "quit":       quitAction,
+                    "splitRight": splitVerticalAction,
+                    "splitDown":  splitHorizontalAction
+                }
+                if (actionId in actions) actions[actionId].trigger()
+            }
+            onProfileRequested: function(index) {
+                appSettings.loadProfile(index)
+            }
+            onToggleRequested: function(prop) {
+                var defaults = {
+                    bloom: 0.55, burnIn: 0.25, staticNoise: 0.12, jitter: 0.2,
+                    glowingLine: 0.2, screenCurvature: 0.5, flickering: 0.1,
+                    horizontalSync: 0.1, rgbShift: 0.2, chromaColor: 0.2, ambientLight: 0.3
+                }
+                appSettings[prop] = appSettings[prop] > 0 ? 0.0 : (defaults[prop] || 0.5)
+            }
+            onClosed: kterminal.forceActiveFocus()
+        }
+
+        // Boot overlay: shows a blinking cursor immediately on terminal creation,
+        // disappears as soon as the first data arrives from the shell process.
+        Item {
+            id: bootOverlay
+            anchors.fill: parent
+            visible: true
+            z: 5
+
+            Text {
+                x: 0
+                y: 0
+                text: "\u2588"
+                font: kterminal.font
+                color: appSettings.fontColor
+
+                SequentialAnimation on opacity {
+                    running: bootOverlay.visible
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0; duration: 500 }
+                    NumberAnimation { to: 1; duration: 500 }
+                }
+            }
+
+            Connections {
+                target: kterminal
+                // Only needed until the first output; without this gate the
+                // handler would run for every PTY block for the session's life.
+                enabled: bootOverlay.visible
+                function onReceivedData(text) {
+                    bootOverlay.visible = false
+                }
+            }
         }
 
         function handleFontChanged(fontFamily, pixelSize, lineSpacing, screenScaling, fontWidth, fallbackFontFamily, lowResolutionFont) {
@@ -187,6 +312,9 @@ Item{
             }
         }
 
+        onWidthChanged: maybeStartSession()
+        onHeightChanged: maybeStartSession()
+
         function startSession() {
             // Retrieve the variable set in main.cpp if arguments are passed.
             if (defaultCmd) {
@@ -207,10 +335,18 @@ Item{
             ksession.startShellProgram();
             forceActiveFocus();
         }
+
+        function maybeStartSession() {
+            if (sessionStarted || width <= 0 || height <= 0)
+                return
+            sessionStarted = true
+            startSession()
+        }
+
         Component.onCompleted: {
             appSettings.fontManager.terminalFontChanged.connect(handleFontChanged);
             appSettings.fontManager.emitCurrentFont();
-            Qt.callLater(startSession);
+            maybeStartSession();
         }
         Component.onDestruction: {
             appSettings.fontManager.terminalFontChanged.disconnect(handleFontChanged);
@@ -234,7 +370,7 @@ Item{
     property alias contextmenu: menuLoader.item
 
     MouseArea {
-        property real margin: appSettings.margin
+        property real margin: terminalContainer.splitActive ? 0 : appSettings.margin
         property real frameSize: appSettings.frameSize * terminalWindow.normalizedWindowScale
 
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
@@ -253,20 +389,20 @@ Item{
             kterminal.simulateMouseDoubleClick(coord.x, coord.y, mouse.button, mouse.buttons, mouse.modifiers);
         }
         onPressed: function(mouse) {
-            kterminal.forceActiveFocus()
+            terminalContainer.paneClicked()
             var coord = correctDistortion(mouse.x, mouse.y);
-            // Intercept clicks on the ASCII tab bar (top row of kterminal)
-            if (asciiTabBar.visible && coord.y >= 0 && coord.y < kterminal.fontMetrics.height) {
-                var tabIdx = asciiTabBar.hitTest(coord.x)
-                if (tabIdx >= 0) {
-                    terminalContainer.tabClicked(tabIdx)
-                    return
+            // If palette is open, consume click and close if outside palette bounds
+            if (commandPalette.isOpen) {
+                var px = commandPalette.x
+                var py = commandPalette.y
+                var pw = commandPalette.width
+                var ph = commandPalette.totalHeight
+                if (coord.x < px || coord.x > px + pw || coord.y < py || coord.y > py + ph) {
+                    commandPalette.close()
                 }
-                if (asciiTabBar.hitTestAddButton(coord.x)) {
-                    terminalContainer.addTabClicked()
-                    return
-                }
+                return
             }
+            kterminal.forceActiveFocus()
             if ((!kterminal.terminalUsesMouse || mouse.modifiers & Qt.ShiftModifier) && mouse.button == Qt.RightButton) {
                 contextmenu.popup();
             } else {
@@ -301,9 +437,13 @@ Item{
     ShaderEffectSource{
         id: kterminalSource
         sourceItem: kterminal
-        hideSource: true
+        // In split mode the per-pane CRT and burn-in are disabled, so kterminal can render
+        // directly into crtContent without an FBO — eliminates N per-pane FBO captures.
+        hideSource: !terminalContainer.splitActive
+        live: !terminalContainer.splitActive
         wrapMode: ShaderEffectSource.Repeat
         visible: false
+        anchors.fill: parent
         textureSize: Qt.size(kterminal.totalWidth * scaleTexture, kterminal.totalHeight * scaleTexture)
         sourceRect: Qt.rect(-kterminal.margin, -kterminal.margin, kterminal.totalWidth, kterminal.totalHeight)
     }
@@ -324,6 +464,9 @@ Item{
 
         BurnInEffect {
             id: burnInEffect
+            textSource: kterminalSource
+            triggerTarget: kterminal
+            active: appSettings.burnIn !== 0 && !terminalContainer.splitActive
         }
     }
 }

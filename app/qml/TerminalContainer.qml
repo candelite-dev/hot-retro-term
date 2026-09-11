@@ -25,20 +25,23 @@ import "utils.js" as Utils
 ShaderTerminal {
     property alias title: terminal.title
     property alias terminalSize: terminal.terminalSize
+    property alias mainTerminal: terminal.mainTerminal
     property bool isActive: false
     signal sessionFinished()
-    signal tabClicked(int index)
-    signal addTabClicked()
+    signal paneClicked()
 
-    property int tabCount: 0
-    property int activeTabIndex: 0
-    property var tabTitles: []
+    property bool showDividerRight: false
+    property bool showDividerBottom: false
+    property bool isSplitLayout: false
+    property int paneId: -1
 
-    property bool loadBloomEffect: appSettings.bloom > 0 || appSettings._frameShininess > 0
+    property bool loadBloomEffect: (appSettings.bloom > 0 || appSettings._frameShininess > 0) && !splitActive
 
     id: mainShader
-    opacity: appSettings.windowOpacity * 0.3 + 0.7
 
+    // windowOpacity now drives real per-pixel window alpha (see
+    // terminal_dynamic.frag's windowAlpha uniform) instead of fading
+    // this item toward the opaque window background.
     source: terminal.mainSource
     burnInEffect: terminal.burnInEffect
     virtualResolution: terminal.virtualResolution
@@ -53,15 +56,33 @@ ShaderTerminal {
         anchors.fill: parent
         isActive: mainShader.isActive
         onSessionFinished: mainShader.sessionFinished()
-        tabCount: mainShader.tabCount
-        activeTabIndex: mainShader.activeTabIndex
-        tabTitles: mainShader.tabTitles
-        onTabClicked: function(idx) { mainShader.tabClicked(idx) }
-        onAddTabClicked: mainShader.addTabClicked()
+        onPaneClicked: mainShader.paneClicked()
+        showDividerRight: mainShader.showDividerRight
+        showDividerBottom: mainShader.showDividerBottom
+        splitActive: mainShader.splitActive
+        isSplitLayout: mainShader.isSplitLayout
+        paneId: mainShader.paneId
     }
 
     function activate() {
         terminal.mainTerminal.forceActiveFocus()
+    }
+
+    function refresh() {
+        terminal.mainTerminal.update()
+        var src = terminal.mainSource
+        src.live = false
+        src.scheduleUpdate()
+        src.live = true
+
+        // // Force kterminal geometryChange so the PTY rows/cols sync to the new pane size.
+        // // 0 → bound value guarantees newGeometry != oldGeometry inside TerminalDisplay.
+        // var kt = terminal.mainTerminal
+        // var savedW = kt.width, savedH = kt.height
+        // kt.width = 0
+        // kt.height = 0
+        // kt.width = savedW
+        // kt.height = savedH
     }
 
     //  EFFECTS  ////////////////////////////////////////////////////////////////

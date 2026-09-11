@@ -64,6 +64,7 @@ signals:
     void baseFontScalingChanged();
     void lowResolutionFontChanged();
     void filteredFontListChanged();
+    void systemFontsReady();
 
     void terminalFontChanged(QString fontFamily,
                              int pixelSize,
@@ -76,7 +77,6 @@ signals:
 private:
     QStringList retrieveMonospaceFonts();
     void populateBundledFonts();
-    void populateSystemFonts();
     void addBundledFont(const QString &name,
                         const QString &text,
                         const QString &source,

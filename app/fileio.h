@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QFile>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <QUrl>
 
@@ -16,6 +17,7 @@ public:
 public slots:
     bool write(const QString& sourceUrl, const QString& data);
     QString read(const QString& sourceUrl);
+    QString userShortcutsPath();
 };
 
 #endif // FILEIO_H

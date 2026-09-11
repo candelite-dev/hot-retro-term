@@ -27,6 +27,8 @@ layout(std140, binding = 0) uniform ubuf {
     float frameShininess;
     float frameSize;
     float bloom;
+    int rasterMode;
+    float frameActive;
 };
 
 layout(binding = 0) uniform sampler2D noiseSource;

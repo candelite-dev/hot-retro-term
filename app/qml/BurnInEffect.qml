@@ -35,11 +35,18 @@ Loader {
     property real _minBurnInFadeTime: appSettings.minBurnInFadeTime
     property real _maxBurnInFadeTime: appSettings.maxBurnInFadeTime
 
+    // Injectable source/trigger — defaults to the enclosing PreprocessedTerminal's ids
+    property var textSource: null
+    property var triggerTarget: null
+
     active: appSettings.burnIn !== 0
 
     anchors.fill: parent
 
     function completelyUpdate() {
+        // Keep the time source running until this trail has fully faded.
+        timeManager.notifyContentPainted()
+
         let newTime = timeManager.time
         if (newTime > lastUpdate) {
             prevLastUpdate = lastUpdate
@@ -70,12 +77,12 @@ Loader {
             wrapMode: ShaderEffectSource.ClampToEdge
 
             format: ShaderEffectSource.RGBA
-            smooth: true
+            smooth: false
 
             visible: false
 
             Connections {
-                target: kterminal
+                target: burnInEffect.triggerTarget !== null ? burnInEffect.triggerTarget : kterminal
 
                 onImagePainted: {
                     completelyUpdate()
@@ -110,9 +117,7 @@ Loader {
         ShaderEffect {
             id: burnInShaderEffect
 
-            property real time: timeManager.time
-
-            property variant txt_source: kterminalSource
+            property variant txt_source: burnInEffect.textSource !== null ? burnInEffect.textSource : kterminalSource
             property variant burnInSource: burnInEffectSource
             property real burnInTime: burnInFadeTime
             property real burnInLastUpdate: burnInEffect.lastUpdate

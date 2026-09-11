@@ -11,32 +11,41 @@ if [ -z "$VERSION" ]; then
     VERSION="unknown"
 fi
 
+CMAKE="${CMAKE:-cmake}"
+if ! command -v "$CMAKE" >/dev/null; then
+    echo "cmake not found in PATH (or set CMAKE=/path/to/cmake)." >&2
+    exit 1
+fi
+# linuxdeploy-plugin-qt locates Qt via qmake in PATH (or $QMAKE).
 if ! command -v qmake >/dev/null; then
     echo "qmake not found in PATH." >&2
     exit 1
 fi
 QTDIR="$(qmake -query QT_INSTALL_PREFIX)"
-QT_INSTALL_QML="$(qmake -query QT_INSTALL_QML)"
 
 APPDIR="$BUILD_DIR/AppDir"
+CMAKE_BUILD="$BUILD_DIR/cmake"
 
 mkdir -p "$BUILD_DIR"
 rm -rf "$APPDIR"
-pushd "$BUILD_DIR"
 
-qmake "$REPO_ROOT/cool-retro-term.pro"
-make -j"$(nproc)"
-
-# Install targets from subprojects (the top-level install only installs the desktop file).
-make -C app install INSTALL_ROOT="$APPDIR"
-make -C qmltermwidget install INSTALL_ROOT="$APPDIR"
-make install INSTALL_ROOT="$APPDIR"
-
-popd
+"$CMAKE" -S "$REPO_ROOT" -B "$CMAKE_BUILD" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_PREFIX_PATH="$QTDIR"
+"$CMAKE" --build "$CMAKE_BUILD" -j"$(nproc)"
+DESTDIR="$APPDIR" "$CMAKE" --install "$CMAKE_BUILD"
 
 # Relocate QMLTermWidget into the standard AppDir QML import path.
-QML_ROOT="$APPDIR$QT_INSTALL_QML"
-if [ -d "$QML_ROOT" ]; then
+# qmltermwidget installs to <prefix>/<libdir>/qt6/qml (libdir may be lib or lib64).
+QML_ROOT=""
+for d in "$APPDIR/usr/lib"*/qt6/qml; do
+    if [ -d "$d" ]; then
+        QML_ROOT="$d"
+        break
+    fi
+done
+if [ -n "$QML_ROOT" ]; then
     mkdir -p "$APPDIR/usr/qml"
     rsync -a "$QML_ROOT/" "$APPDIR/usr/qml/"
     rm -rf "$QML_ROOT"

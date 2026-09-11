@@ -27,47 +27,61 @@ import CoolRetroTerm 1.0
 Item {
     id: tabsRoot
 
-    readonly property int innerPadding: 6
-    readonly property string currentTitle: tabsModel.get(currentIndex).title ?? "cool-retro-term"
-    property int currentIndex: 0
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    readonly property string currentTitle: {
+        var idx = currentIndex
+        if (idx === undefined || idx === null ||
+            tabsModel.count === 0 || idx < 0 || idx >= tabsModel.count)
+            return "cool-retro-term"
+        var tab = tabsModel.get(idx)
+        return tab && tab.title ? tab.title : "cool-retro-term"
+    }
+    property alias  currentIndex: splitModel.currentIndex
+    property alias  focusedPaneId: splitModel.focusedPaneId
     readonly property int count: tabsModel.count
     property size terminalSize: Qt.size(0, 0)
 
-    readonly property int tabWidth: 160
+    readonly property bool isSplitMode:     splitModel.isSplitMode
+    readonly property bool needsUnifiedCRT: splitModel.needsUnifiedCRT
+
+    property alias terminalPool: terminalPool
+
+    // Delegate tab/pane operations to SplitTreeModel
+    function addTab()               { splitModel.addTab() }
+    function closeTab(index)        { splitModel.closeTab(index) }
+    function splitPane(orientation) { splitModel.splitPane(orientation) }
+    function closePane(paneId)      { splitModel.closePane(paneId) }
+    function closeFocusedPane()     { splitModel.closePane(splitModel.focusedPaneId) }
+    function moveFocus(direction)   { splitModel.moveFocus(direction) }
+
+    // ── Internal state ────────────────────────────────────────────────────────
+
+    readonly property int innerPadding: 6
+    readonly property int tabWidth:     160
     readonly property int tabBarHeight: 28
     property real scrollTargetX: 0
 
-    property int titleRevision: 0
+    // ── Core objects ──────────────────────────────────────────────────────────
 
-    function collectTitles() {
-        titleRevision; // binding dependency — incremented on title changes
-        var titles = []
-        for (var i = 0; i < tabsModel.count; i++)
-            titles.push(tabsModel.get(i).title || "cool-retro-term")
-        return titles
+    Item { id: terminalPool; visible: false }
+
+    ListModel { id: tabsModel }
+
+    SplitTreeModel {
+        id: splitModel
+        tabsModel:    tabsModel
+        terminalPool: terminalPool
     }
 
-    function normalizeTitle(rawTitle) {
-        if (rawTitle === undefined || rawTitle === null) {
-            return ""
-        }
-        return String(rawTitle).trim()
+    onCurrentIndexChanged: {
+        ensureTabVisible(currentIndex)
+        splitModel.isCurrentTab = true
+        if (splitModel.splitTrees[currentIndex])
+            splitModel.focusedPaneId = splitModel.findFirstTerminal(splitModel.splitTrees[currentIndex])
     }
 
-    function addTab() {
-        tabsModel.append({ title: "" })
-        tabsRoot.currentIndex = tabsModel.count - 1
-    }
-
-    function closeTab(index) {
-        if (tabsModel.count <= 1) {
-            terminalWindow.close()
-            return
-        }
-
-        tabsModel.remove(index)
-        tabsRoot.currentIndex = Math.min(tabsRoot.currentIndex, tabsModel.count - 1)
-    }
+    Component.onCompleted: splitModel.addTab()
 
     function ensureTabVisible(idx) {
         var x = idx * tabWidth
@@ -79,18 +93,13 @@ Item {
         tabsFlickable.contentX = scrollTargetX
     }
 
-    onCurrentIndexChanged: ensureTabVisible(currentIndex)
-
-    ListModel {
-        id: tabsModel
-    }
-
-    Component.onCompleted: addTab()
+    // ── Window curvature (outer) ──────────────────────────────────────────────
 
     CurvatureInputFilter {
         targetItem: contentColumn
         curvature: appSettings.windowCurvature > 0
-            ? appSettings.windowCurvature * appSettings.screenCurvatureSize * (1024 / (0.5 * contentColumn.width + 0.5 * contentColumn.height))
+            ? appSettings.windowCurvature * appSettings.screenCurvatureSize
+              * (1024 / (0.5 * contentColumn.width + 0.5 * contentColumn.height))
             : 0
     }
 
@@ -101,11 +110,14 @@ Item {
 
         layer.enabled: appSettings.windowCurvature > 0
         layer.effect: ShaderEffect {
-            property real screenCurvature: appSettings.windowCurvature * appSettings.screenCurvatureSize * (1024 / (0.5 * width + 0.5 * height))
-            vertexShader: "qrc:/shaders/window_curvature.vert.qsb"
+            property real screenCurvature: appSettings.windowCurvature * appSettings.screenCurvatureSize
+                * (1024 / (0.5 * width + 0.5 * height))
+            vertexShader:   "qrc:/shaders/window_curvature.vert.qsb"
             fragmentShader: "qrc:/shaders/window_curvature.frag.qsb"
         }
 
+        // ── Legacy tab row (currently unused — height:0 / visible:false) ─────
+        // AsciiTabBar inside PaneLayout is the active tab bar implementation.
         Rectangle {
             id: tabRow
             Layout.fillWidth: true
@@ -138,7 +150,7 @@ Item {
                         width: Math.max(tabsFlickable.width, tabsModel.count * tabWidth)
                         height: tabBarHeight
 
-                        property int draggingIndex: -1
+                        property int  draggingIndex: -1
                         property real draggingX: 0
 
                         Repeater {
@@ -150,7 +162,7 @@ Item {
                                 height: tabBarHeight
 
                                 property bool isCurrentTab: index === tabsRoot.currentIndex
-                                property bool isDragging: tabsContainer.draggingIndex === index
+                                property bool isDragging:   tabsContainer.draggingIndex === index
 
                                 property real baseX: {
                                     if (tabsContainer.draggingIndex < 0 || index === tabsContainer.draggingIndex)
@@ -158,13 +170,10 @@ Item {
                                     var di = tabsContainer.draggingIndex
                                     var targetIdx = Math.max(0, Math.min(tabsModel.count - 1,
                                                              Math.round(tabsContainer.draggingX / tabWidth)))
-                                    if (di < targetIdx) {
-                                        if (index > di && index <= targetIdx)
-                                            return (index - 1) * tabWidth
-                                    } else if (di > targetIdx) {
-                                        if (index >= targetIdx && index < di)
-                                            return (index + 1) * tabWidth
-                                    }
+                                    if (di < targetIdx && index > di && index <= targetIdx)
+                                        return (index - 1) * tabWidth
+                                    if (di > targetIdx && index >= targetIdx && index < di)
+                                        return (index + 1) * tabWidth
                                     return index * tabWidth
                                 }
 
@@ -190,8 +199,7 @@ Item {
 
                                     layer.enabled: isCurrentTab
                                     layer.effect: Glow {
-                                        radius: 6
-                                        samples: 13
+                                        radius: 6; samples: 13
                                         color: appSettings.fontColor
                                         spread: 0.1
                                     }
@@ -216,7 +224,7 @@ Item {
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.rightMargin: innerPadding
-                                    text: "\u00d7"
+                                    text: "×"
                                     color: Qt.rgba(appSettings.fontColor.r, appSettings.fontColor.g, appSettings.fontColor.b,
                                                    closeBtnArea.containsMouse ? 1.0 : (isCurrentTab ? 0.8 : 0.4))
                                     font.pixelSize: 13
@@ -278,7 +286,6 @@ Item {
                     id: addTabBtn
                     width: tabBarHeight - 4
                     height: tabBarHeight - 4
-                    anchors.verticalCenter: parent ? parent.verticalCenter : undefined
                     Layout.alignment: Qt.AlignVCenter
                     Layout.rightMargin: 4
                     Layout.leftMargin: 4
@@ -316,45 +323,40 @@ Item {
                 }
             }
         }
+        // ── End legacy tab row ────────────────────────────────────────────────
 
-        StackLayout {
-            id: stack
+        // ── Content area ──────────────────────────────────────────────────────
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: tabsRoot.currentIndex
 
-            Repeater {
-                model: tabsModel
-                TerminalContainer {
-                    property bool shouldHaveFocus: terminalWindow.active && StackLayout.isCurrentItem
-                    isActive: StackLayout.isCurrentItem
-                    onShouldHaveFocusChanged: {
-                        if (shouldHaveFocus) {
-                            activate()
-                        }
-                    }
-                    onTitleChanged: {
-                        tabsModel.setProperty(index, "title", normalizeTitle(title))
-                        tabsRoot.titleRevision++
-                    }
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    onSessionFinished: tabsRoot.closeTab(index)
-                    onTerminalSizeChanged: updateTerminalSize()
+            PaneLayout {
+                id: paneLayout
+                anchors.fill: parent
+                splitManager: splitModel
+                onTabClicked:   function(idx) { tabsRoot.currentIndex = idx }
+                onAddTabClicked: tabsRoot.addTab()
+            }
 
-                    tabCount: tabsModel.count
-                    activeTabIndex: tabsRoot.currentIndex
-                    tabTitles: tabsRoot.collectTitles()
-                    onTabClicked: function(idx) { tabsRoot.currentIndex = idx }
-                    onAddTabClicked: tabsRoot.addTab()
-
-                    function updateTerminalSize() {
-                        if (index == 0) {
-                            tabsRoot.terminalSize = terminalSize
-                        }
-                    }
-                }
+            InputRouter {
+                id: inputRouter
+                anchors.fill: parent
+                splitManager: splitModel
+                tabBarRef:    paneLayout.sharedTabBar
+                visible: splitModel.needsUnifiedCRT
+                z: 3
+                onZoomRequested: function(delta) { delta > 0 ? zoomIn.trigger() : zoomOut.trigger() }
+                onTabClicked:    function(idx) { tabsRoot.currentIndex = idx }
+                onAddTabClicked: tabsRoot.addTab()
             }
         }
+    }
+
+    // ── Screen curvature input correction for split mode ──────────────────────
+    CurvatureInputFilter {
+        targetItem: tabsRoot
+        curvature: isSplitMode
+            ? appSettings.screenCurvature * appSettings.screenCurvatureSize * terminalWindow.normalizedWindowScale
+            : 0
     }
 }

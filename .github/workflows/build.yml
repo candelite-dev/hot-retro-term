@@ -1,0 +1,73 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [master, feature]
+
+jobs:
+  build-ubuntu:
+    name: Ubuntu ${{ matrix.ubuntu }}
+    runs-on: ubuntu-${{ matrix.ubuntu }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: [22.04, 24.04]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.7.*'
+          modules: 'qt5compat qtshadertools'
+          cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libx11-dev \
+            libxcb1-dev \
+            libfontconfig1-dev \
+            libfreetype-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+  build-macos:
+    name: macOS
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.7.*'
+          modules: 'qt5compat qtshadertools'
+          cache: true
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
+
+      - name: Build
+        run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)

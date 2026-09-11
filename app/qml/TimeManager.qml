@@ -19,6 +19,8 @@
 *******************************************************************************/
 import QtQuick
 
+import "utils.js" as Utils
+
 QtObject {
     id: timeManager
 
@@ -26,20 +28,47 @@ QtObject {
     property real time: 0
 
     property int framesPerUpdate: Math.max(1, appSettings.effectsFrameSkip)
-    property int _frameCounter: 0
 
-    property var frameDriver: FrameAnimation {
-        running: enableTimer
-        onTriggered: {
-            timeManager._frameCounter += 1
+    // The time source only runs while something actually consumes an
+    // advancing `time`: a time-based effect, or an in-progress burn-in fade.
+    property bool effectsActive: appSettings.flickering > 0
+                                 || appSettings.staticNoise > 0
+                                 || appSettings.jitter > 0
+                                 || appSettings.horizontalSync > 0
+                                 || appSettings.glowingLine > 0
 
-            if (timeManager._frameCounter >= timeManager.framesPerUpdate) {
-                time = elapsedTime
-                timeManager._frameCounter = 0
-            }
+    // Held true while a burn-in trail may still be fading. Re-armed by every
+    // content paint (notifyContentPainted); expires one full fade after the
+    // last paint, letting the app go fully idle with burn-in enabled.
+    property bool burnInHold: false
+
+    property Timer _burnInHoldTimer: Timer {
+        interval: Utils.lint(appSettings.minBurnInFadeTime,
+                             appSettings.maxBurnInFadeTime,
+                             appSettings.burnIn) * 1000 + 250
+        onTriggered: timeManager.burnInHold = false
+    }
+
+    function notifyContentPainted() {
+        if (appSettings.burnIn > 0) {
+            burnInHold = true
+            _burnInHoldTimer.restart()
         }
     }
 
-    onEnableTimerChanged: if (!enableTimer) _frameCounter = 0
-    onFramesPerUpdateChanged: _frameCounter = 0
+    // A Timer, not a FrameAnimation: a running FrameAnimation pins the render
+    // loop to vsync and produces identical frames between `time` updates
+    // (measured: the frame-skip setting changed neither frame rate nor CPU).
+    // With a Timer, a frame is only rendered when `time` actually changes, so
+    // effectsFrameSkip becomes a real GPU throttle — 60/skip effect updates
+    // per second on any display, refresh-rate-independent.
+    // `time` accumulates (never rewinds across restarts): the shaders only
+    // need it continuous, and a rewind would freeze the burn-in decay.
+    property Timer frameDriver: Timer {
+        running: timeManager.enableTimer
+                 && (timeManager.effectsActive || timeManager.burnInHold)
+        repeat: true
+        interval: Math.round(1000 * timeManager.framesPerUpdate / 60)
+        onTriggered: timeManager.time += interval / 1000
+    }
 }

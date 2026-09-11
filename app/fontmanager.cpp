@@ -1,8 +1,13 @@
 #include "fontmanager.h"
 
+#include <QFile>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFontMetricsF>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QThreadPool>
 #include <QtGlobal>
 #include <QtMath>
 
@@ -18,26 +23,43 @@ FontManager::FontManager(QObject *parent)
     , m_filteredFontListModel(this)
 {
     populateBundledFonts();
-    populateSystemFonts();
     m_fontListModel.setFonts(m_allFonts);
     updateFilteredFonts();
     updateComputedFont();
+
+    // Enumerate system fonts off the startup path — QFontDatabase::families() can be slow
+    // (100ms+ on macOS). Bundled fonts are already available; system fonts appear shortly after.
+    QThreadPool::globalInstance()->start([this]() {
+        QStringList families = retrieveMonospaceFonts();
+        QMetaObject::invokeMethod(this, [this, families]() {
+            for (const QString &family : families) {
+                if (m_bundledFamilies.contains(family))
+                    continue;
+                FontEntry entry;
+                entry.name = family;
+                entry.text = family;
+                entry.source = QString();
+                entry.baseWidth = 1.0;
+                entry.pixelSize = kSystemFontPixelSize;
+                entry.lowResolutionFont = false;
+                entry.isSystemFont = true;
+                entry.family = family;
+                m_allFonts.append(entry);
+            }
+            m_fontListModel.setFonts(m_allFonts);
+            updateFilteredFonts();
+            emit systemFontsReady();
+        }, Qt::QueuedConnection);
+    });
 }
 
 QStringList FontManager::retrieveMonospaceFonts()
 {
     QStringList result;
-
-    QFontDatabase fontDatabase;
-    const QStringList fontFamilies = fontDatabase.families();
-
-    for (const QString &fontFamily : fontFamilies) {
-        QFont font(fontFamily);
-        if (fontDatabase.isFixedPitch(font.family())) {
-            result.append(fontFamily);
-        }
+    for (const QString &family : QFontDatabase::families()) {
+        if (QFontDatabase::isFixedPitch(family))
+            result.append(family);
     }
-
     return result;
 }
 
@@ -198,186 +220,23 @@ void FontManager::populateBundledFonts()
 {
     m_allFonts.clear();
 
-    addBundledFont(
-        "TERMINESS_SCALED",
-        "Terminess",
-        ":/fonts/terminus/TerminessNerdFontMono-Regular.ttf",
-        1.0,
-        12,
-        true);
-    addBundledFont(
-        "BIGBLUE_TERMINAL_SCALED",
-        "BigBlue Terminal",
-        ":/fonts/bigblue-terminal/BigBlueTerm437NerdFontMono-Regular.ttf",
-        1.0,
-        12,
-        true);
-    addBundledFont(
-        "EXCELSIOR_SCALED",
-        "Fixedsys Excelsior",
-        ":/fonts/fixedsys-excelsior/FSEX301-L2.ttf",
-        1.0,
-        16,
-        true,
-        "UNSCII_16_SCALED");
-    addBundledFont(
-        "GREYBEARD_SCALED",
-        "Greybeard",
-        ":/fonts/greybeard/Greybeard-16px.ttf",
-        1.0,
-        16,
-        true,
-        "UNSCII_16_SCALED");
-    addBundledFont(
-        "COMMODORE_PET_SCALED",
-        "Commodore PET",
-        ":/fonts/pet-me/PetMe.ttf",
-        0.5,
-        8,
-        true,
-        "UNSCII_8_SCALED");
-    addBundledFont(
-        "GOHU_11_SCALED",
-        "Gohu 11",
-        ":/fonts/gohu/GohuFont11NerdFontMono-Regular.ttf",
-        1.0,
-        11,
-        true);
-    addBundledFont(
-        "COZETTE_SCALED",
-        "Cozette",
-        ":/fonts/cozette/CozetteVector.ttf",
-        1.0,
-        13,
-        true);
-    addBundledFont(
-        "UNSCII_8_SCALED",
-        "Unscii 8",
-        ":/fonts/unscii/unscii-8.ttf",
-        0.5,
-        8,
-        true,
-        "UNSCII_8_SCALED");
-    addBundledFont(
-        "UNSCII_8_THIN_SCALED",
-        "Unscii 8 Thin",
-        ":/fonts/unscii/unscii-8-thin.ttf",
-        0.5,
-        8,
-        true,
-        "UNSCII_8_SCALED");
-    addBundledFont(
-        "UNSCII_16_SCALED",
-        "Unscii 16",
-        ":/fonts/unscii/unscii-16-full.ttf",
-        1.0,
-        16,
-        true,
-        "UNSCII_16_SCALED");
-    addBundledFont(
-        "APPLE_II_SCALED",
-        "Apple ][",
-        ":/fonts/apple2/PrintChar21.ttf",
-        0.5,
-        8,
-        true,
-        "UNSCII_8_SCALED");
-    addBundledFont(
-        "ATARI_400_SCALED",
-        "Atari 400-800",
-        ":/fonts/atari-400-800/AtariClassic-Regular.ttf",
-        0.5,
-        8,
-        true,
-        "UNSCII_8_SCALED");
-    addBundledFont(
-        "COMMODORE_64_SCALED",
-        "Commodore 64",
-        ":/fonts/pet-me/PetMe64.ttf",
-        0.5,
-        8,
-        true,
-        "UNSCII_8_SCALED");
-    addBundledFont(
-        "IBM_EGA_8x8",
-        "IBM EGA 8x8",
-        ":/fonts/oldschool-pc-fonts/PxPlus_IBM_EGA_8x8.ttf",
-        0.5,
-        8,
-        true,
-        "UNSCII_8_SCALED");
-    addBundledFont(
-        "IBM_VGA_8x16",
-        "IBM VGA 8x16",
-        ":/fonts/oldschool-pc-fonts/PxPlus_IBM_VGA_8x16.ttf",
-        1.0,
-        16,
-        true,
-        "UNSCII_16_SCALED");
-
-    addBundledFont(
-        "TERMINESS",
-        "Terminess",
-        ":/fonts/terminus/TerminessNerdFontMono-Regular.ttf",
-        1.0,
-        32,
-        false);
-    addBundledFont(
-        "HACK",
-        "Hack",
-        ":/fonts/hack/HackNerdFontMono-Regular.ttf",
-        1.0,
-        32,
-        false);
-    addBundledFont(
-        "FIRA_CODE",
-        "Fira Code",
-        ":/fonts/fira-code/FiraCodeNerdFontMono-Regular.ttf",
-        1.0,
-        32,
-        false);
-    addBundledFont(
-        "IOSEVKA",
-        "Iosevka",
-        ":/fonts/iosevka/IosevkaTermNerdFontMono-Regular.ttf",
-        1.0,
-        32,
-        false);
-    addBundledFont(
-        "JETBRAINS_MONO",
-        "JetBrains Mono",
-        ":/fonts/jetbrains-mono/JetBrainsMonoNerdFontMono-Regular.ttf",
-        1.0,
-        32,
-        false);
-    addBundledFont(
-        "IBM_3278",
-        "IBM 3278",
-        ":/fonts/ibm-3278/3270NerdFontMono-Regular.ttf",
-        1.0,
-        32,
-        false);
-    addBundledFont(
-        "SOURCE_CODE_PRO",
-        "Source Code Pro",
-        ":/fonts/source-code-pro/SauceCodeProNerdFontMono-Regular.ttf",
-        1.0,
-        32,
-        false);
-    addBundledFont(
-        "DEPARTURE_MONO_SCALED",
-        "Departure Mono",
-        ":/fonts/departure-mono/DepartureMonoNerdFontMono-Regular.otf",
-        1.0,
-        11,
-        true);
-    addBundledFont(
-        "OPENDYSLEXIC",
-        "OpenDyslexic",
-        ":/fonts/opendyslexic/OpenDyslexicMNerdFontMono-Regular.otf",
-        1.0,
-        32,
-        false);
+    QFile f(QStringLiteral(":/fonts/manifest.json"));
+    if (!f.open(QIODevice::ReadOnly)) {
+        qWarning("FontManager: could not open :/fonts/manifest.json");
+        return;
+    }
+    const QJsonArray arr = QJsonDocument::fromJson(f.readAll()).array();
+    for (const QJsonValue &v : arr) {
+        const QJsonObject obj = v.toObject();
+        addBundledFont(
+            obj.value(QLatin1String("name")).toString(),
+            obj.value(QLatin1String("text")).toString(),
+            obj.value(QLatin1String("source")).toString(),
+            obj.value(QLatin1String("baseWidth")).toDouble(1.0),
+            obj.value(QLatin1String("pixelSize")).toInt(32),
+            obj.value(QLatin1String("lowResolution")).toBool(false),
+            obj.value(QLatin1String("fallback")).toString());
+    }
 }
 
 void FontManager::addBundledFont(const QString &name,
@@ -401,26 +260,6 @@ void FontManager::addBundledFont(const QString &name,
         ? computeBaseWidth(entry.family, pixelSize, baseWidth)
         : baseWidth;
     m_allFonts.append(entry);
-}
-
-void FontManager::populateSystemFonts()
-{
-    const QStringList families = retrieveMonospaceFonts();
-    for (const QString &family : families) {
-        if (m_bundledFamilies.contains(family)) {
-            continue;
-        }
-        FontEntry entry;
-        entry.name = family;
-        entry.text = family;
-        entry.source = QString();
-        entry.baseWidth = 1.0;
-        entry.pixelSize = kSystemFontPixelSize;
-        entry.lowResolutionFont = false;
-        entry.isSystemFont = true;
-        entry.family = family;
-        m_allFonts.append(entry);
-    }
 }
 
 void FontManager::updateFilteredFonts()

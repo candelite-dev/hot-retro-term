@@ -29,7 +29,24 @@ QtObject {
     }
 
     property TimeManager timeManager: TimeManager {
-        enableTimer: windowsModel.count > 0
+        enableTimer: windowsModel.count > 0 && appRoot.anyWindowVisible
+    }
+
+    // False when every window is minimized or hidden — lets TimeManager stop
+    // the render loop entirely. Recomputed from window visibility hooks.
+    property bool anyWindowVisible: true
+
+    function recomputeWindowVisibility() {
+        for (var i = 0; i < windowsModel.count; i++) {
+            var w = windowsModel.get(i).window
+            if (w && w.visible
+                  && w.visibility !== Window.Minimized
+                  && w.visibility !== Window.Hidden) {
+                anyWindowVisible = true
+                return
+            }
+        }
+        anyWindowVisible = false
     }
 
     property SettingsWindow settingsWindow: SettingsWindow {
@@ -54,6 +71,7 @@ QtObject {
         windowsModel.append({ window: window })
         window.show()
         window.requestActivate()
+        recomputeWindowVisibility()
     }
 
     function closeWindow(window) {
@@ -65,6 +83,7 @@ QtObject {
         }
 
         window.destroy()
+        recomputeWindowVisibility()
 
         if (windowsModel.count === 0) {
             appSettings.close()

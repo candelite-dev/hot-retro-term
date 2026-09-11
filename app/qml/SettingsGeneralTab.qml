@@ -22,6 +22,8 @@ import QtQuick.Controls 2.4
 import QtQuick.Layouts 1.1
 import QtQuick.Dialogs
 
+import "Components"
+
 ColumnLayout {
     GroupBox {
         Layout.fillWidth: true
@@ -227,12 +229,31 @@ ColumnLayout {
             }
             Label {
                 text: qsTr("Opacity")
-                visible: !appSettings.isMacOS
             }
             SimpleSlider {
                 onValueChanged: appSettings.windowOpacity = value
                 value: appSettings.windowOpacity
-                visible: !appSettings.isMacOS
+            }
+            Label {
+                text: qsTr("Background Blur")
+                visible: appSettings.isMacOS
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                visible: appSettings.isMacOS
+                Slider {
+                    id: backgroundBlurSlider
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 100
+                    stepSize: 1
+                    onValueChanged: appSettings.backgroundBlurRadius = value
+                    value: appSettings.backgroundBlurRadius
+                }
+                SizedLabel {
+                    text: Math.round(backgroundBlurSlider.value)
+                }
             }
             Label {
                 text: qsTr("Window Curvature")
@@ -240,6 +261,25 @@ ColumnLayout {
             SimpleSlider {
                 onValueChanged: appSettings.windowCurvature = value
                 value: appSettings.windowCurvature
+            }
+            Label {
+                text: qsTr("Tab Bar Scale")
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Slider {
+                    id: tabBarScaleSlider
+                    Layout.fillWidth: true
+                    from: 1.0
+                    to: 5.0
+                    stepSize: 0.5
+                    onValueChanged: appSettings.tabBarScale = value
+                    value: appSettings.tabBarScale
+                }
+                SizedLabel {
+                    text: Math.round(tabBarScaleSlider.value * 10) / 10 + "x"
+                }
             }
         }
     }

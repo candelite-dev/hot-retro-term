@@ -29,11 +29,6 @@ ApplicationWindow {
     width: 1024
     height: 768
 
-    // Show the window once it is ready.
-    Component.onCompleted: {
-        visible = true
-    }
-
     minimumWidth: 320
     minimumHeight: 240
 
@@ -42,13 +37,120 @@ ApplicationWindow {
     property bool fullscreen: false
     onFullscreenChanged: visibility = (fullscreen ? Window.FullScreen : Window.Windowed)
 
+    // Keeps appRoot.anyWindowVisible current so the render loop can stop
+    // while every window is minimized or hidden. Also re-applies the native
+    // titlebar tint below, since a fullscreen round-trip changes visibility
+    // without firing onVisibleChanged.
+    onVisibilityChanged: {
+        appRoot.recomputeWindowVisibility()
+        Qt.callLater(_applyMacChrome)
+    }
+
+    // Qt's alpha-buffered surface format isn't enough on macOS — the NSWindow
+    // itself still reports opaque to the compositor. Flip it natively once
+    // the native window exists (i.e. once shown), and keep the titlebar's
+    // tint following windowOpacity/backgroundColor from then on (see the
+    // Connections block below).
+    onVisibleChanged: Qt.callLater(_applyMacChrome)
+
+    // Re-reads both appSettings values fresh rather than taking them as
+    // signal arguments — a profile load sets windowOpacity and
+    // backgroundColor in sequence, so an argument-based call could fire
+    // with a transiently mismatched pair. Guarded internally so every call
+    // site can be unconditional; macWindowHelper only exists on macOS.
+    function _applyMacChrome() {
+        if (!appSettings.isMacOS || !visible)
+            return
+        macWindowHelper.applyWindowChrome(terminalWindow,
+                                           appSettings.backgroundColor,
+                                           appSettings.windowOpacity,
+                                           appSettings.backgroundBlurRadius)
+    }
+
+    Connections {
+        target: appSettings
+        function onWindowOpacityChanged() { terminalWindow._applyMacChrome() }
+        function onBackgroundColorChanged() { terminalWindow._applyMacChrome() }
+        function onBackgroundBlurRadiusChanged() { terminalWindow._applyMacChrome() }
+    }
+
     menuBar: WindowMenu { }
 
     property real normalizedWindowScale: 1024 / ((0.5 * width + 0.5 * height))
 
     color: "#00000000"
 
+    // Fusion style's default ApplicationWindow background is an opaque
+    // Rectangle filled with palette.window — it paints under the CRT
+    // content and defeats per-pixel window alpha even though `color`
+    // above is transparent.
+    background: null
+
     title: terminalTabs.currentTitle
+
+    // Keyboard shortcut bindings — loaded from shortcuts.json at startup.
+    // To rebind: copy shortcuts.json to ~/.config/cool-retro-term/shortcuts.json
+    // and edit; the user file is merged over the bundled defaults at startup.
+    property var _sc: ({})
+
+    function _loadShortcuts() {
+        var mac = Qt.platform.os === "osx"
+        var bundledShortcuts = fileIO.read("qrc:/shortcuts.json")
+        if (bundledShortcuts === "") {
+            console.log("Unable to load bundled shortcuts from qrc:/shortcuts.json")
+            return
+        }
+        var raw = JSON.parse(bundledShortcuts)
+
+        // Optional user override — gracefully ignored if absent
+        var userPath = fileIO.userShortcutsPath()
+        if (userPath !== "") {
+            try {
+                var userFile = fileIO.read(userPath)
+                if (userFile !== "") {
+                    var userRaw = JSON.parse(userFile)
+                    for (var uk in userRaw) raw[uk] = userRaw[uk]
+                }
+            } catch(e) { console.log("shortcuts override parse error:", e) }
+        }
+
+        var result = {}
+        for (var key in raw) {
+            var entry = raw[key]
+            result[key] = mac ? entry.mac : entry["default"]
+        }
+        _sc = result
+    }
+
+    Component.onCompleted: {
+        _loadShortcuts()
+
+        // Apply to Action objects
+        newWindowAction.shortcut      = _sc.newWindow      || ""
+        quitAction.shortcut           = _sc.quit           || ""
+        copyAction.shortcut           = _sc.copy           || ""
+        pasteAction.shortcut          = _sc.paste          || ""
+        newTabAction.shortcut         = _sc.newTab         || ""
+        closeTabAction.shortcut       = _sc.closeTab       || ""
+        commandPaletteAction.shortcut = _sc.commandPalette || ""
+        splitVerticalAction.shortcut  = _sc.splitRight     || ""
+        splitHorizontalAction.shortcut= _sc.splitDown      || ""
+
+        // Apply to directional focus Shortcuts
+        focusLeft.sequence  = _sc.focusLeft  || ""
+        focusRight.sequence = _sc.focusRight || ""
+        focusUp.sequence    = _sc.focusUp    || ""
+        focusDown.sequence  = _sc.focusDown  || ""
+
+        // Apply tab-switch shortcuts (1-9)
+        var template = _sc.switchTab || ""
+        for (var i = 0; i < tabShortcuts.count; i++) {
+            var s = tabShortcuts.objectAt(i)
+            if (s) s.sequence = template.replace("{n}", String(i + 1))
+        }
+
+        visible = true
+    }
 
     Action {
         id: fullscreenAction
@@ -62,13 +164,10 @@ ApplicationWindow {
     Action {
         id: newWindowAction
         text: qsTr("New Window")
-        shortcut: appSettings.isMacOS ? "Meta+N" : "Ctrl+Shift+N"
-        onTriggered: appRoot.createWindow()
     }
     Action {
         id: quitAction
         text: qsTr("Quit")
-        shortcut: appSettings.isMacOS ? StandardKey.Close : "Ctrl+Shift+Q"
         onTriggered: terminalWindow.close()
     }
     Action {
@@ -83,12 +182,10 @@ ApplicationWindow {
     Action {
         id: copyAction
         text: qsTr("Copy")
-        shortcut: appSettings.isMacOS ? StandardKey.Copy : "Ctrl+Shift+C"
     }
     Action {
         id: pasteAction
         text: qsTr("Paste")
-        shortcut: appSettings.isMacOS ? StandardKey.Paste : "Ctrl+Shift+V"
     }
     Action {
         id: zoomIn
@@ -114,60 +211,43 @@ ApplicationWindow {
     Action {
         id: newTabAction
         text: qsTr("New Tab")
-        shortcut: appSettings.isMacOS ? "Meta+T" : "Ctrl+Shift+T"
         onTriggered: terminalTabs.addTab()
     }
     Action {
         id: closeTabAction
         text: qsTr("Close Tab")
-        shortcut: appSettings.isMacOS ? "Meta+W" : "Ctrl+Shift+W"
-        onTriggered: terminalTabs.closeTab(terminalTabs.currentIndex)
+        onTriggered: terminalTabs.closeFocusedPane()
     }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+1" : "Alt+1"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 0) terminalTabs.currentIndex = 0
+    Action {
+        id: commandPaletteAction
+        text: qsTr("Command Palette")
     }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+2" : "Alt+2"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 1) terminalTabs.currentIndex = 1
+    Action {
+        id: splitVerticalAction
+        text: qsTr("Split Right")
+        onTriggered: terminalTabs.splitPane(Qt.Horizontal)
     }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+3" : "Alt+3"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 2) terminalTabs.currentIndex = 2
+    Action {
+        id: splitHorizontalAction
+        text: qsTr("Split Down")
+        onTriggered: terminalTabs.splitPane(Qt.Vertical)
     }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+4" : "Alt+4"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 3) terminalTabs.currentIndex = 3
+
+    Shortcut { id: focusLeft;  context: Qt.WindowShortcut; onActivated: terminalTabs.moveFocus("left") }
+    Shortcut { id: focusRight; context: Qt.WindowShortcut; onActivated: terminalTabs.moveFocus("right") }
+    Shortcut { id: focusUp;    context: Qt.WindowShortcut; onActivated: terminalTabs.moveFocus("up") }
+    Shortcut { id: focusDown;  context: Qt.WindowShortcut; onActivated: terminalTabs.moveFocus("down") }
+
+    // Tab-switching shortcuts 1-9, sequences set in Component.onCompleted
+    Instantiator {
+        id: tabShortcuts
+        model: 9
+        delegate: Shortcut {
+            context: Qt.WindowShortcut
+            onActivated: if (terminalTabs.count > index) terminalTabs.currentIndex = index
+        }
     }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+5" : "Alt+5"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 4) terminalTabs.currentIndex = 4
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+6" : "Alt+6"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 5) terminalTabs.currentIndex = 5
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+7" : "Alt+7"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 6) terminalTabs.currentIndex = 6
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+8" : "Alt+8"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 7) terminalTabs.currentIndex = 7
-    }
-    Shortcut {
-        sequence: appSettings.isMacOS ? "Meta+9" : "Alt+9"
-        context: Qt.WindowShortcut
-        onActivated: if (terminalTabs.count > 8) terminalTabs.currentIndex = 8
-    }
+
     TerminalTabs {
         id: terminalTabs
         width: parent.width
