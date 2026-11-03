@@ -69,7 +69,8 @@ QtObject {
             return
 
         windowsModel.append({ window: window })
-        window.show()
+        if (window.fullscreen) window.showFullScreen()
+        else window.show()
         window.requestActivate()
         recomputeWindowVisibility()
     }

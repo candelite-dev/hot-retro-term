@@ -29,7 +29,7 @@ FontManager::FontManager(QObject *parent)
 
     // Enumerate system fonts off the startup path — QFontDatabase::families() can be slow
     // (100ms+ on macOS). Bundled fonts are already available; system fonts appear shortly after.
-    QThreadPool::globalInstance()->start([this]() {
+    m_fontDiscoveryPool.start([this]() {
         QStringList families = retrieveMonospaceFonts();
         QMetaObject::invokeMethod(this, [this, families]() {
             for (const QString &family : families) {
@@ -51,6 +51,13 @@ FontManager::FontManager(QObject *parent)
             emit systemFontsReady();
         }, Qt::QueuedConnection);
     });
+}
+
+FontManager::~FontManager()
+{
+    // The worker queues results to this QObject. Join before any members are
+    // destroyed; QObject then removes queued deliveries during its teardown.
+    m_fontDiscoveryPool.waitForDone();
 }
 
 QStringList FontManager::retrieveMonospaceFonts()

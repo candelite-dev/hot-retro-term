@@ -43,18 +43,63 @@ In split or multi-tab mode, all panes are composited under a single CRT shader p
 | Command palette | Ctrl+Shift+P |
 | Zoom in / out | Ctrl++ / Ctrl+- |
 
-## Building
+## Build and run
 
-**Requirements**: Qt 6.10.0+ with `qt5compat` and `qtshadertools` modules.
+Start in the **hot-retro-term root**, one level above `qmltermwidget`.
+Use CMake 3.21+, a C++17 compiler, and **Qt 6.10 or newer**, including
+Qt Quick/Controls, Widgets, SQL, `qt5compat`, `qtshadertools`, and Qt Test.
+The `qmltermwidget` folder is included source; only KDSingleApplication is a submodule.
 
 ```bash
-qmake && make
-./cool-retro-term
+git submodule update --init --recursive
+./scripts/dev.sh run
 ```
 
-For platform-specific dependency setup, see the upstream wiki:
-- [Linux build instructions](https://github.com/Swordfish90/cool-retro-term/wiki/Build-Instructions-(Linux))
-- [macOS build instructions](https://github.com/Swordfish90/cool-retro-term/wiki/Build-Instructions-(macOS))
+On macOS, install the prerequisites with `brew install cmake qt`. On Linux,
+install a Qt 6.10+ SDK with the modules above (the Qt version in your distribution
+may be older). The Linux system-package list is in `.github/workflows/build.yml`.
+If Qt lives outside a standard prefix, set `QT_DIR=/path/to/Qt/6.10.x/<platform>`.
+
+`dev.sh` always builds before launching and uses `build/dev`, avoiding stale IDE
+builds from another machine or CPU architecture. `JOBS=8` changes build parallelism.
+The build step uses your installed prerequisites.
+
+```bash
+./scripts/dev.sh test          # build and run regression + real-shell startup tests
+./scripts/dev.sh build         # build only
+./scripts/dev.sh run --default-settings
+```
+
+Equivalent CMake commands:
+
+```bash
+cmake --preset dev
+cmake --build --preset dev --parallel 4
+ctest --preset dev
+```
+
+For the file-by-file guide, start with [ARCHITECTURE.md](ARCHITECTURE.md).
+For branches, commits, and recovering saved work, read
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Findings and remaining cleanup work are
+in [docs/CLEANUP_AUDIT.md](docs/CLEANUP_AUDIT.md).
+
+## Launch options
+
+```bash
+./scripts/dev.sh run --workdir "$HOME/projects" -p "Monochrome Green" --fullscreen
+./scripts/dev.sh run -e /bin/sh -c 'printf "Hello\n"; exec /bin/sh'
+```
+
+Use `-e` last: all following arguments belong to the child command, including
+anything that looks like an app flag. `-p` and `--profile` are equivalent.
+`--help` and `--version` work without a graphical display. Missing option values
+produce an error before the GUI starts.
+
+Malformed saved settings no longer prevent startup. Healthy settings load while
+unreadable database entries remain unchanged for that session, including on exit.
+Warnings name the affected entry. `--default-settings` starts with defaults and
+explicitly replaces the current general/appearance entries when the app closes;
+it does not clear custom profiles.
 
 ## Credits
 

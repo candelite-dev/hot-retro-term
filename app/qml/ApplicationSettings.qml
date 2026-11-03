@@ -22,9 +22,10 @@ import QtQuick.Controls 2.0
 import CoolRetroTerm 1.0
 
 import "utils.js" as Utils
-import "SettingsSchema.js" as Schema
+import "SettingsCodec.js" as Codec
 
 QtObject {
+    id: settings
     readonly property string version: appVersion
     readonly property int profileVersion: 2
 
@@ -141,7 +142,7 @@ QtObject {
 
     property FontManager fontManager: FontManager {
         id: fontManager
-        baseFontScaling: baseFontScaling
+        baseFontScaling: settings.baseFontScaling
     }
 
     signal initializedSettings
@@ -160,168 +161,60 @@ QtObject {
         Qt.quit()
     }
 
+    property var startupOptions: launchOptions
     property Storage storage: Storage {}
-
-    // Settings schema — loaded from SettingsSchema.js (single source of truth).
-    // To add a setting: declare the property above, then add one line to SettingsSchema.js.
-    readonly property var _settingsSchema: Schema.schema
-
-    function stringify(obj) {
-        var replacer = function (key, val) {
-            return val.toFixed ? Number(val.toFixed(4)) : val
-        }
-        return JSON.stringify(obj, replacer, 2)
+    property SettingsPersistence persistence: SettingsPersistence {
+        settingsTarget: settings
+        storage: settings.storage
+        onWarning: function(message) { console.warn(message) }
     }
-
-    function _schemaCompose(scope) {
-        var obj = {}
-        for (var i = 0; i < _settingsSchema.length; i++) {
-            var e = _settingsSchema[i]
-            if (e.scope === scope) obj[e.k] = this[e.p]
-        }
-        return obj
+    property ProfileCatalog profileCatalog: ProfileCatalog {
+        id: catalog
+        onWarning: function(message) { console.warn("Profile: " + message) }
     }
+    property alias profilesList: catalog.model
 
-    function _schemaLoad(obj, scope) {
-        for (var i = 0; i < _settingsSchema.length; i++) {
-            var e = _settingsSchema[i]
-            if (e.scope === scope && obj[e.k] !== undefined)
-                this[e.p] = obj[e.k]
-        }
-    }
+    // Public facade for settings controls; serialization, I/O, and the profile model
+    // live in their respective components.
+    function stringify(value) { return Codec.stringify(value) }
+    function composeSettingsString() { return Codec.stringify(Codec.compose(settings, "settings")) }
+    function composeProfileObject() { return Codec.compose(settings, "profile") }
+    function composeProfileString() { return Codec.stringify(composeProfileObject()) }
+    function loadSettings() { persistence.loadCurrent() }
+    function storeSettings() { return persistence.storeCurrent() }
+    function loadCustomProfiles() { persistence.loadCustomProfiles(profileCatalog) }
+    function storeCustomProfiles() { return persistence.storeCustomProfiles(profileCatalog) }
+    function composeCustomProfilesString() { return profileCatalog.customProfilesString() }
+    function loadCustomProfilesString(text) { return profileCatalog.load(text, false) }
+    function appendCustomProfile(name, text) { return profileCatalog.append(name, text) }
+    function getProfileIndexByName(name) { return profileCatalog.find(name) }
 
-    function composeSettingsString() { return stringify(_schemaCompose("settings")) }
-    function composeProfileObject()  { return _schemaCompose("profile") }
-    function composeProfileString()  { return stringify(composeProfileObject()) }
-
-    function loadSettings() {
-        var settingsString = storage.getSetting("_CURRENT_SETTINGS")
-        var profileString = storage.getSetting("_CURRENT_PROFILE")
-        if (!settingsString || !profileString) return
-        loadSettingsString(settingsString)
-        loadProfileString(profileString)
-        if (verbose)
-            console.log("Loading settings: " + settingsString + profileString)
-    }
-
-    function storeSettings() {
-        var settingsString = composeSettingsString()
-        var profileString = composeProfileString()
-        storage.setSetting("_CURRENT_SETTINGS", settingsString)
-        storage.setSetting("_CURRENT_PROFILE", profileString)
-        if (verbose) {
-            console.log("Storing settings: " + settingsString)
-            console.log("Storing profile: " + profileString)
+    function loadValues(text, scope) {
+        try {
+            Codec.apply(settings, Codec.parseSettings(text, scope), scope)
+            return true
+        } catch (error) {
+            console.warn("Unable to load " + scope + ": " + error.message)
+            return false
         }
     }
-
-    function loadSettingsString(settingsString) {
-        _schemaLoad(JSON.parse(settingsString), "settings")
-    }
-
-    function loadProfileString(profileString) {
-        _schemaLoad(JSON.parse(profileString), "profile")
-    }
-
-    function storeCustomProfiles() {
-        storage.setSetting("_CUSTOM_PROFILES", composeCustomProfilesString())
-    }
-
-    function loadCustomProfiles() {
-        var customProfileString = storage.getSetting("_CUSTOM_PROFILES")
-        if (customProfileString === undefined)
-            customProfileString = "[]"
-        loadCustomProfilesString(customProfileString)
-    }
-
-    function loadCustomProfilesString(customProfilesString) {
-        var customProfiles = JSON.parse(customProfilesString)
-        for (var i = 0; i < customProfiles.length; i++) {
-            var profile = customProfiles[i]
-
-            if (verbose)
-                console.log("Loading custom profile: " + stringify(profile))
-
-            profilesList.append(profile)
-        }
-    }
-
-    function composeCustomProfilesString() {
-        var customProfiles = []
-        for (var i = 0; i < profilesList.count; i++) {
-            var profile = profilesList.get(i)
-            if (profile.builtin)
-                continue
-            customProfiles.push({
-                                    "text": profile.text,
-                                    "obj_string": profile.obj_string,
-                                    "builtin": false
-                                })
-        }
-        return stringify(customProfiles)
-    }
-
+    function loadSettingsString(text) { return loadValues(text, "settings") }
+    function loadProfileString(text) { return loadValues(text, "profile") }
     function loadProfile(index) {
-        var profile = profilesList.get(index)
-        loadProfileString(profile.obj_string)
-    }
-
-    function appendCustomProfile(name, profileString) {
-        profilesList.append({
-                                "text": name,
-                                "obj_string": profileString,
-                                "builtin": false
-                            })
-    }
-
-    // PROFILES ///////////////////////////////////////////////////////////////
-    // Populated at startup from profiles/builtin_profiles.json (QRC).
-    // To add a built-in profile: add an entry to that JSON file and rebuild.
-    property ListModel profilesList: ListModel {}
-
-    function _loadBuiltinProfiles() {
-        var rawProfiles = fileIO.read("qrc:/profiles/builtin_profiles.json")
-        if (rawProfiles === "") {
-            console.log("Unable to load built-in profiles from qrc:/profiles/builtin_profiles.json")
-            return
-        }
-        var items = JSON.parse(rawProfiles)
-        for (var i = 0; i < items.length; i++)
-            profilesList.append(items[i])
-    }
-
-    function getProfileIndexByName(name) {
-        for (var i = 0; i < profilesList.count; i++) {
-            if (profilesList.get(i).text === name)
-                return i
-        }
-        return -1
+        if (index < 0 || index >= profilesList.count) return false
+        return loadProfileString(profilesList.get(index).obj_string)
     }
 
     Component.onCompleted: {
-        _loadBuiltinProfiles()
-
-        // Manage the arguments from the QML side.
-        var args = Qt.application.arguments
-        if (args.indexOf("--verbose") !== -1) {
-            verbose = true
-        }
-        if (args.indexOf("--default-settings") === -1) {
-            loadSettings()
-        }
-
+        profileCatalog.load(fileIO.read("qrc:/profiles/builtin_profiles.json"), true)
+        verbose = startupOptions.verbose
+        if (!startupOptions.defaultSettings) loadSettings()
         loadCustomProfiles()
-
-        var profileArgPosition = args.indexOf("--profile")
-        if (profileArgPosition !== -1) {
-            var profileIndex = getProfileIndexByName(args[profileArgPosition + 1])
-            if (profileIndex !== -1) {
-                loadProfile(profileIndex)
-            } else {
-                console.log("Warning: selected profile is not valid; ignoring it")
-            }
+        if (startupOptions.profile) {
+            var index = getProfileIndexByName(startupOptions.profile)
+            if (index >= 0) loadProfile(index)
+            else console.warn("Unknown profile: " + startupOptions.profile)
         }
-
         initializedSettings()
     }
 

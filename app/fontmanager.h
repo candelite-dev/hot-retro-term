@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QHash>
 #include <QSet>
+#include <QThreadPool>
 
 #include "fontlistmodel.h"
 
@@ -24,6 +25,7 @@ class FontManager : public QObject
 
 public:
     explicit FontManager(QObject *parent = nullptr);
+    ~FontManager() override;
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void emitCurrentFont();
@@ -75,7 +77,7 @@ signals:
                              bool lowResolutionFont);
 
 private:
-    QStringList retrieveMonospaceFonts();
+    static QStringList retrieveMonospaceFonts();
     void populateBundledFonts();
     void addBundledFont(const QString &name,
                         const QString &text,
@@ -92,6 +94,7 @@ private:
     QString resolveFontFamily(const QString &sourcePath);
     qreal computeBaseWidth(const QString &family, int pixelSize, qreal fallbackWidth) const;
 
+    QThreadPool m_fontDiscoveryPool;
     FontListModel m_fontListModel;
     FontListModel m_filteredFontListModel;
     QVector<FontEntry> m_allFonts;

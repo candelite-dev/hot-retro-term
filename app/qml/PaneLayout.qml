@@ -22,6 +22,7 @@ import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 
 import "utils.js" as Utils
+import "SplitTree.js" as Tree
 
 // Visual composition layer: shared tab bar + pane stack + unified CRT pipeline.
 // splitManager (SplitTreeModel) drives all content.
@@ -29,6 +30,9 @@ Item {
     id: paneLayout
 
     property var splitManager: null  // SplitTreeModel
+
+    property Item terminalPool: null
+    property alias paneArea: paneStack
 
     signal tabClicked(int index)
     signal addTabClicked()
@@ -46,10 +50,10 @@ Item {
                                                         : Qt.font({family: "monospace", pixelSize: 16})
     property var _currentTree: splitManager ? splitManager.splitTrees[splitManager.currentIndex] : null
     property var _paneRects: (splitManager && _currentTree)
-                             ? splitManager.computePaneRects(_currentTree, 0, 0, 1, 1)
+                             ? Tree.computePaneRects(_currentTree, 0, 0, 1, 1)
                              : []
     property var _splitBoundaries: (splitManager && _currentTree)
-                                   ? splitManager.computeSplitBoundaries(_currentTree, 0, 0, 1, 1)
+                                   ? Tree.computeSplitBoundaries(_currentTree, 0, 0, 1, 1)
                                    : []
 
     // ── crtContent: captured as unified CRT source ────────────────────────────
@@ -114,15 +118,11 @@ Item {
                     width: Math.round(rectData.w * paneStack.width)
                     height: Math.round(rectData.h * paneStack.height)
 
-                    PaneTreeNode {
+                    TerminalPane {
                         anchors.fill: parent
-                        treeData: ({
-                            type: "terminal",
-                            paneId: paneSlot.rectData.paneId,
-                            _showDividerRight: false,
-                            _showDividerBottom: false
-                        })
+                        paneId: paneSlot.rectData.paneId
                         splitManager: paneLayout.splitManager
+                        terminalPool: paneLayout.terminalPool
                     }
                 }
             }

@@ -38,7 +38,7 @@ rm -f "$BUILD_DIR/${APP%.app}.dmg"
 
 pushd "$BUILD_DIR"
 
-PLUGIN_DST="$APP/Contents/PlugIns/qmltermwidget"
+PLUGIN_DST="$APP/Contents/PlugIns/QMLTermWidget"
 rm -rf "$PLUGIN_DST"
 mkdir -p "$APP/Contents/PlugIns"
 cp -R qmltermwidget/QMLTermWidget "$PLUGIN_DST"

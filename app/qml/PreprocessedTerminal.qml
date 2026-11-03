@@ -18,8 +18,8 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *******************************************************************************/
 
-import QtQuick 2.2
-import QtQuick.Controls 2.0
+import QtQuick
+import QtQuick.Controls
 
 import QMLTermWidget 2.0
 
@@ -317,20 +317,19 @@ Item{
 
         function startSession() {
             // Retrieve the variable set in main.cpp if arguments are passed.
-            if (defaultCmd) {
-                ksession.setShellProgram(defaultCmd);
-                ksession.setArgs(defaultCmdArgs);
+            if (launchOptions.command !== "") {
+                ksession.setShellProgram(launchOptions.command);
+                ksession.setArgs(launchOptions.commandArguments);
             } else if (appSettings.useCustomCommand) {
                 var args = Utils.tokenizeCommandLine(appSettings.customCommand);
                 ksession.setShellProgram(args[0]);
                 ksession.setArgs(args.slice(1));
-            } else if (!defaultCmd && appSettings.isMacOS) {
+            } else if (appSettings.isMacOS) {
                 // OSX Requires the following default parameters for auto login.
                 ksession.setArgs(["-i", "-l"]);
             }
 
-            if (workdir)
-                ksession.initialWorkingDirectory = workdir;
+            ksession.initialWorkingDirectory = launchOptions.workingDirectory;
 
             ksession.startShellProgram();
             forceActiveFocus();

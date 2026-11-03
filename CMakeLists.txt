@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.21)
 
 project(cool-retro-term
     VERSION 0.1
@@ -27,8 +27,14 @@ if(HRT_IPO_SUPPORTED)
 endif()
 
 find_package(Qt6 6.10 REQUIRED COMPONENTS
-    Core Qml Quick Widgets Sql QuickControls2 ShaderTools
+    Core Qml Quick Widgets Sql QuickControls2 Core5Compat ShaderTools
 )
+
+include(CTest)
+
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/KDSingleApplication/CMakeLists.txt")
+    message(FATAL_ERROR "KDSingleApplication is missing. Run: git submodule update --init --recursive")
+endif()
 
 # KDSingleApplication: static submodule build
 set(KDSingleApplication_STATIC   ON  CACHE BOOL "" FORCE)
@@ -39,3 +45,7 @@ add_subdirectory(KDSingleApplication)
 
 add_subdirectory(qmltermwidget)
 add_subdirectory(app)
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

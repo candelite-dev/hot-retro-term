@@ -1,9 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
 
-find_package(Qt6 REQUIRED COMPONENTS
-    Core Qml Quick Widgets Sql QuickControls2 ShaderTools
-)
-
 # --- App version from git ---
 execute_process(
     COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR}/.. describe --tags --always --dirty=-dirty
@@ -23,6 +19,8 @@ set_source_files_properties(qml/resources.qrc PROPERTIES
 # --- Executable ---
 qt_add_executable(cool-retro-term
     main.cpp
+    launchoptions.cpp
+    launchoptions.h
     fileio.cpp
     fontmanager.cpp
     fontlistmodel.cpp

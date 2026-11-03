@@ -80,15 +80,12 @@ ColumnLayout {
                     text: qsTr("Remove")
                     property alias currentIndex: profilesView.currentIndex
 
-                    enabled: currentIndex >= 0 && !appSettings.profilesList.get(
-                                 currentIndex).builtin
+                    enabled: currentIndex >= 0 && currentIndex < appSettings.profilesList.count
+                             && !appSettings.profilesList.get(currentIndex).builtin
                     onClicked: {
                         appSettings.profilesList.remove(currentIndex)
-                        profilesView.selection.clear()
-
-                        // TODO This is a very ugly workaround. The view didn't update on Qt 5.3.2.
-                        profilesView.model = 0
-                        profilesView.model = appSettings.profilesList
+                        profilesView.currentIndex = Math.min(profilesView.currentIndex,
+                                                              appSettings.profilesList.count - 1)
                     }
                 }
                 Item {
@@ -123,9 +120,8 @@ ColumnLayout {
 
                             delete profileObject.name
 
-                            appSettings.appendCustomProfile(name,
-                                                            JSON.stringify(
-                                                                profileObject))
+                            if (!appSettings.appendCustomProfile(name, JSON.stringify(profileObject)))
+                                throw "The profile contains invalid settings."
                         } catch (err) {
                             messageDialog.text = qsTr(err)
                             messageDialog.open()
@@ -138,8 +134,8 @@ ColumnLayout {
                     Layout.fillWidth: true
 
                     text: qsTr("Export")
-                    enabled: currentIndex >= 0 && !appSettings.profilesList.get(
-                                 currentIndex).builtin
+                    enabled: currentIndex >= 0 && currentIndex < appSettings.profilesList.count
+                             && !appSettings.profilesList.get(currentIndex).builtin
                     onClicked: {
                         fileDialog.selectExisting = false
                         fileDialog.callBack = function (url) {
