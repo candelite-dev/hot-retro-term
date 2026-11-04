@@ -132,6 +132,69 @@ private slots:
         QTRY_COMPARE(app.evaluate("tabs.focusedTerminal.mainTerminal.session.getShellPID()").toInt(), firstPid);
         QTRY_VERIFY(app.evaluate("tabs.focusedTerminal.mainTerminal.width > 0 && tabs.terminalSize.width > 0").toBool());
     }
+
+    void smallRetinaFontKeepsSelectedRasterization() {
+        AppFixture app;
+        app.load();
+        QVERIFY(!app.engine.rootObjects().isEmpty());
+        auto *tabs = app.window()->findChild<QObject *>("terminalTabs");
+        QVERIFY(tabs);
+        app.engine.globalObject().setProperty("tabs", app.engine.newQObject(tabs));
+        app.evaluate("root.appSettings.fontScaling = 0.65; root.appSettings.loadProfileString("
+                     "'{\"fontSource\":0,\"fontName\":\"IBM_VGA_8x16\",\"rasterization\":1,\"lineSpacing\":0.1}')");
+        QTRY_VERIFY(app.evaluate("tabs.focusedTerminal !== null").toBool());
+        QVERIFY(QTest::qWaitForWindowExposed(qobject_cast<QQuickWindow *>(app.window())));
+        // Model a Retina output independently of the headless runner's screen.
+        app.evaluate("tabs.focusedTerminal.screenResolution = Qt.size("
+                     "tabs.focusedTerminal.width * 2, tabs.focusedTerminal.height * 2)");
+        const auto density = app.evaluate("tabs.focusedTerminal._screenDensity").toNumber();
+        QVERIFY(density > 1.9 && density < 2.0);
+        QObject *effect = nullptr;
+        for (auto *item : tabs->findChildren<QObject *>()) {
+            if (item->property("rasterMode").isValid()) { effect = item; break; }
+        }
+        QVERIFY(effect);
+        app.engine.globalObject().setProperty("effect", app.engine.newQObject(effect));
+        const auto strength = app.evaluate("effect.rasterizationIntensity").toNumber();
+        QVERIFY2(strength > 0.9, "Selected scanlines disappear at a usable 65% font scale on Retina");
+        app.evaluate("tabs.focusedTerminal.screenResolution = Qt.size("
+                     "tabs.focusedTerminal.virtualResolution.width * 0.5,"
+                     "tabs.focusedTerminal.virtualResolution.height * 0.5)");
+        QCOMPARE(app.evaluate("effect.rasterizationIntensity").toNumber(), 0.0);
+    }
+    void sharedRasterizationKeepsFontPixelGrid_data() {
+        QTest::addColumn<bool>("split");
+        QTest::addColumn<qreal>("fontScale");
+        QTest::newRow("split-small") << true << qreal(0.65);
+        QTest::newRow("split-large") << true << qreal(1.5);
+        QTest::newRow("tabs-small") << false << qreal(0.65);
+        QTest::newRow("tabs-large") << false << qreal(1.5);
+    }
+    void sharedRasterizationKeepsFontPixelGrid() {
+        QFETCH(bool, split);
+        QFETCH(qreal, fontScale);
+        AppFixture app;
+        app.load();
+        QVERIFY(!app.engine.rootObjects().isEmpty());
+        auto *tabs = app.window()->findChild<QObject *>("terminalTabs");
+        QVERIFY(tabs);
+        app.engine.globalObject().setProperty("tabs", app.engine.newQObject(tabs));
+        app.evaluate(QString("root.appSettings.fontScaling = %1").arg(fontScale));
+        app.evaluate("root.appSettings.loadProfileString("
+                     "'{\"fontSource\":0,\"fontName\":\"IBM_VGA_8x16\",\"rasterization\":1,\"lineSpacing\":0.1}')");
+        QTRY_VERIFY(app.evaluate("tabs.focusedTerminal !== null").toBool());
+        QVERIFY(QTest::qWaitForWindowExposed(qobject_cast<QQuickWindow *>(app.window())));
+        const auto horizontal = app.evaluate("tabs.focusedTerminal.virtualResolution.width / tabs.focusedTerminal.width").toNumber();
+        const auto vertical = app.evaluate("tabs.focusedTerminal.virtualResolution.height / tabs.focusedTerminal.height").toNumber();
+        app.evaluate(split ? "tabs.splitPane(Qt.Horizontal)" : "tabs.addTab()");
+        QTRY_VERIFY(app.evaluate("tabs.needsUnifiedCRT").toBool());
+        auto *shared = app.window()->findChild<QObject *>("unifiedCRT");
+        QVERIFY(shared);
+        app.engine.globalObject().setProperty("shared", app.engine.newQObject(shared));
+        QTRY_VERIFY(app.evaluate("shared.visible").toBool());
+        QVERIFY(qAbs(app.evaluate("shared.virtualResolution.width / shared.width").toNumber() - horizontal) < 0.005);
+        QVERIFY(qAbs(app.evaluate("shared.virtualResolution.height / shared.height").toNumber() - vertical) < 0.005);
+    }
     void corruptedSettingsStillOpenWindow_data() {
         QTest::addColumn<QString>("key");
         QTest::addColumn<QString>("raw");

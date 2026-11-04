@@ -65,6 +65,21 @@ Native desktop verification remains unavailable: the native run reported no scre
 and the computer-use service could not start. Headless rendering, shell startup, and
 layout transitions are tested; GPU appearance and packaged distribution are not yet verified.
 
+## Rasterization follow-up — 2026-11-04
+
+The longstanding raster-mask fade ran from two to four output pixels per font
+pixel. At 65% scaling on Retina, a 16px IBM VGA font has about 1.96 output pixels
+per font pixel, so its selected scanline effect was entirely disabled. A 12px
+font at the same scale still received a partial effect, making font changes look
+like rendering regressions. The fade now runs from one to two pixels.
+
+The shared CRT pass also used unscaled window dimensions as its virtual grid,
+losing the terminal font's scale. It now uses the same font-pixel grid as the
+single-pane path, includes the tab bar, and measures output from its own bounds.
+Five startup regression cases reproduce the old failures and verify the 65%
+Retina case and consistent grids through tab/split transitions at small/large
+font scales. These test QML values; native GPU appearance still needs desktop review.
+
 ## Remaining work, in priority order
 
 1. **TerminalDisplay boundaries.** Its ~4,000 lines mix painting, selection, input,

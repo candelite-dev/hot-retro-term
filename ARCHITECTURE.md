@@ -70,6 +70,12 @@ keeps a fading trail, and `ShaderTerminal` applies the static and animated effec
 For multiple panes or tabs, `PaneLayout` captures the shared content and applies
 one CRT effect pipeline. `splitActive` disables the individual pipelines.
 
+Both paths express `virtualResolution` in terminal font pixels, using the font's
+`screenScaling`. The shared path includes the tab bar in that grid. `ShaderTerminal`
+fades the raster mask between one and two output pixels per terminal pixel, keeping
+scanline/pixel modes visible at practical font sizes while suppressing unresolved
+patterns. Measuring output size uses the effect's own bounds, not the whole window.
+
 `InputRouter` maps coordinates through `PaneLayout.paneArea` and the actual terminal
 item. It must use the same margins, scaling, and tab-bar position as the renderer.
 `curvatureinputfilter.cpp` handles distortion before those input events arrive.

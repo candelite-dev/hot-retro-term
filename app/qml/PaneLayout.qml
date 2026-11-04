@@ -45,6 +45,7 @@ Item {
     // ── Font metrics from focused terminal ────────────────────────────────────
 
     property var  _ft: splitManager ? splitManager.getTerminal(splitManager.focusedPaneId) : null
+    readonly property real _screenScaling: _ft ? _ft.screenScaling : 1
     property size _charMetrics: _ft && _ft.mainTerminal ? _ft.mainTerminal.fontMetrics : Qt.size(8, 16)
     property font _termFont:    _ft && _ft.mainTerminal ? _ft.mainTerminal.font
                                                         : Qt.font({family: "monospace", pixelSize: 16})
@@ -172,6 +173,7 @@ Item {
 
     ShaderTerminal {
         id: unifiedCRT
+        objectName: "unifiedCRT"
         anchors.fill: parent
         visible: splitManager ? splitManager.needsUnifiedCRT : false
         enabled: false
@@ -181,10 +183,16 @@ Item {
         source: unifiedPaneSource
         burnInEffect: unifiedBurnIn
         bloomSource: unifiedBloomSourceLoader.item
-        virtualResolution: Qt.size(paneStack.width, paneStack.height)
+        // Every pane shares the font settings. Keep the terminal pixel grid
+        // when capturing the whole layout, including its tab bar; window
+        // dimensions alone made the mask denser and suppressed rasterization.
+        virtualResolution: Qt.size(
+            Math.floor(crtContent.width / paneLayout._screenScaling),
+            Math.floor(crtContent.height / paneLayout._screenScaling)
+        )
         screenResolution: Qt.size(
-            terminalWindow.width  * Screen.devicePixelRatio * appSettings.windowScaling,
-            terminalWindow.height * Screen.devicePixelRatio * appSettings.windowScaling
+            unifiedCRT.width  * Screen.devicePixelRatio * appSettings.windowScaling,
+            unifiedCRT.height * Screen.devicePixelRatio * appSettings.windowScaling
         )
     }
 
