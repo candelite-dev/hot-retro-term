@@ -1,4 +1,7 @@
 #include <QApplication>
+#include <QClipboard>
+#include <QMimeData>
+#include <QScopeGuard>
 #include <QColor>
 #include <QDir>
 #include <QFontMetrics>
@@ -51,8 +54,13 @@ struct AppFixture {
         context->setContextProperty("appVersion", "test");
         context->setContextProperty("fileIO", &files);
         context->setContextProperty("macWindowHelper", &chrome);
+#ifdef Q_OS_WIN
+        const auto arguments = QStringList{"test"} + flags + QStringList{
+            "-e", qEnvironmentVariable("COMSPEC", "cmd.exe"), "/D", "/Q", "/K", "echo HRT_SMOKE_READY"};
+#else
         const auto arguments = QStringList{"test"} + flags + QStringList{
             "-e", "/bin/sh", "-c", "printf HRT_SMOKE_READY; exec /bin/cat"};
+#endif
         const auto launch = parseLaunchOptions(arguments, directory.path());
         Q_ASSERT(launch.isValid());
         context->setContextProperty("launchOptions", launch.options.toVariantMap());
@@ -193,6 +201,70 @@ private slots:
         QTest::newRow("single-terminal") << QString("single");
         QTest::newRow("shared-tabs") << QString("tabs");
         QTest::newRow("shared-splits") << QString("split");
+    }
+    void threePaneResizeStress() {
+        AppFixture app;
+        app.load();
+        QVERIFY(!app.engine.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(app.window());
+        QVERIFY(window);
+        auto *tabs = window->findChild<QObject *>("terminalTabs");
+        QVERIFY(tabs);
+        app.engine.globalObject().setProperty("tabs", app.engine.newQObject(tabs));
+        app.evaluate("tabs.splitPane(Qt.Horizontal); tabs.splitPane(Qt.Vertical)");
+        QTRY_VERIFY(app.evaluate("tabs.needsUnifiedCRT").toBool());
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        for (int i = 0; i < 60; ++i) {
+            window->resize(800 + (i * 73) % 600, 500 + (i * 47) % 300);
+            QTest::qWait(16);
+            QVERIFY(!window->grabWindow().isNull());
+        }
+        const auto screenshot = qEnvironmentVariable("HRT_TEST_RESIZE_SCREENSHOT");
+        if (!screenshot.isEmpty()) QVERIFY(window->grabWindow().save(screenshot));
+    }
+    void nativeClipboardShortcuts() {
+        if (!qEnvironmentVariableIsSet("HRT_TEST_NATIVE_INPUT"))
+            QSKIP("Set HRT_TEST_NATIVE_INPUT for the native clipboard shortcut check");
+        AppFixture app;
+        app.load();
+        auto *window = qobject_cast<QQuickWindow *>(app.window());
+        QVERIFY(window);
+        auto *tabs = window->findChild<QObject *>("terminalTabs");
+        QVERIFY(tabs);
+        app.engine.globalObject().setProperty("tabs", app.engine.newQObject(tabs));
+        QTRY_VERIFY(app.evaluate("tabs.focusedTerminal.mainTerminal.session.history.indexOf('HRT_SMOKE_READY') >= 0").toBool());
+        app.evaluate("root.appSettings.screenCurvature = 0; root.appSettings.windowCurvature = 0");
+        window->requestActivate();
+        QVERIFY(QTest::qWaitForWindowActive(window));
+        auto previousClipboard = std::make_unique<QMimeData>();
+        if (const auto *data = QApplication::clipboard()->mimeData()) {
+            for (const auto &format : data->formats()) previousClipboard->setData(format, data->data(format));
+        }
+        const auto restoreClipboard = qScopeGuard([&]() {
+            QApplication::clipboard()->setMimeData(previousClipboard.release());
+        });
+#ifdef Q_OS_MACOS
+        const auto shortcutModifiers = Qt::ControlModifier;
+#else
+        const auto shortcutModifiers = Qt::ControlModifier | Qt::ShiftModifier;
+#endif
+        QApplication::clipboard()->setText("HRT_SHORTCUT_PASTE");
+        QTest::keyClick(window, Qt::Key_V, shortcutModifiers);
+        QTRY_VERIFY(app.evaluate("tabs.focusedTerminal.mainTerminal.session.history.indexOf('HRT_SHORTCUT_PASTE') >= 0").toBool());
+        auto *display = qobject_cast<QQuickItem *>(app.evaluate("tabs.focusedTerminal.mainTerminal").toQObject());
+        QVERIFY(display);
+        const auto cell = display->property("fontMetrics").toSize();
+        QVERIFY(cell.width() > 0 && cell.height() > 0);
+        const auto point = display->mapToScene(QPointF(cell.width() * 4, cell.height() / 2));
+        QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier, point.toPoint());
+        // Establish that the selection contains the marker before attributing
+        // any failure to shortcut dispatch rather than platform mouse routing.
+        QVERIFY(QMetaObject::invokeMethod(display, "copyClipboard"));
+        if (!QApplication::clipboard()->text().contains("HRT_SMOKE_READY"))
+            QSKIP("Paste shortcut passed; native selection could not be established for copy");
+        QApplication::clipboard()->setText("HRT_EMPTY_COPY");
+        QTest::keyClick(window, Qt::Key_C, shortcutModifiers);
+        QTRY_VERIFY(QApplication::clipboard()->text().contains("HRT_SMOKE_READY"));
     }
     void burnInFeedbackStaysBufferedDuringResizeAndZoom() {
         QFETCH(QString, layout);

@@ -108,7 +108,8 @@ next save. The full five-suite headless regression run passes.
    model and IPC payload before they can be honored by an already-running instance.
 5. **TOML settings migration.** Preserve and reconcile the saved SettingsStore work
    on its own branch. This pass retains SQLite and the existing persisted format.
-6. **Windows integration.** Preserve the ConPTY/Windows work; this branch uses a
-   POSIX engine. Review its changes individually before integration.
+6. **Windows integration.** PR #5 now integrates the ConPTY backend with this
+   cleanup. WSL input/paste (D2) and native NVIDIA split-resize crashes (D3) remain
+   open; see [WINDOWS.md](WINDOWS.md) for current validation evidence.
 
 This remains an incremental cleanup, with legacy engine and platform work listed above.

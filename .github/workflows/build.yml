@@ -6,6 +6,9 @@ on:
     branches: [master, feature]
 
 jobs:
+  build-windows:
+    uses: ./.github/workflows/windows.yml
+
   build-ubuntu:
     name: Ubuntu ${{ matrix.ubuntu }}
     runs-on: ubuntu-${{ matrix.ubuntu }}

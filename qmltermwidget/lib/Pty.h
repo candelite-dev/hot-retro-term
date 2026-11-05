@@ -30,6 +30,10 @@
 
 #ifndef PTY_H
 #define PTY_H
+#include <QtGlobal>
+#ifdef Q_OS_WIN
+#include "PtyWin.h"        // Windows: ConPTY version of Konsole::Pty
+#else
 
 // Qt
 #include <QStringList>
@@ -213,4 +217,5 @@ Q_OBJECT
 
 }
 
+#endif
 #endif // PTY_H

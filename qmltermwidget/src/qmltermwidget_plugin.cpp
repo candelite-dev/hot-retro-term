@@ -32,7 +32,7 @@ void QmltermwidgetPlugin::initializeEngine(QQmlEngine *engine, const char *uri)
             if (QDir(cs).exists()) break;
         }
 
-        setenv("KB_LAYOUT_DIR",kbl.toUtf8().constData(),1);
-        setenv("COLORSCHEMES_DIR",cs.toUtf8().constData(),1);
+        qputenv("KB_LAYOUT_DIR", kbl.toUtf8());
+        qputenv("COLORSCHEMES_DIR", cs.toUtf8());
     }
 }

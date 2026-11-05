@@ -25,7 +25,6 @@
 // System
 #include <cstdio>
 #include <cstdlib>
-#include <unistd.h>
 #include <string>
 
 // Qt
@@ -522,4 +521,3 @@ ExtendedCharTable ExtendedCharTable::instance;
 
 
 //#include "Emulation.moc"
-

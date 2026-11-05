@@ -21,12 +21,14 @@
 #include "ProcessInfo.h"
 
 // Unix
+#if !defined(Q_OS_WIN)
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pwd.h>
 #include <sys/param.h>
+#endif
 
 // Qt
 #include <QtCore/QDir>
@@ -1008,6 +1010,7 @@ private:
 };
 #endif
 
+#if !defined(Q_OS_WIN)
 SSHProcessInfo::SSHProcessInfo(const ProcessInfo& process)
     : _process(process)
 {
@@ -1155,6 +1158,7 @@ QString SSHProcessInfo::format(const QString& input) const
 
     return output;
 }
+#endif
 
 ProcessInfo* ProcessInfo::newInstance(int aPid, bool enableEnvironmentRead)
 {

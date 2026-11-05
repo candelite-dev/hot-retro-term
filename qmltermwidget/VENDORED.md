@@ -30,6 +30,16 @@ part of this snapshot and need separate compatibility review.
 The startup integration tests exercise real shells, tab/split destruction, and
 process teardown without manual thread-pool drains.
 
+## Windows integration
+
+The current master source is the baseline of the Windows integration. CMake selects
+`PtyWin` (ConPTY) on Windows and retains the existing POSIX PTY sources elsewhere.
+Windows compatibility includes history allocation/I/O, public console APIs,
+COMSPEC shell selection, and full cursor repaints for CRT recapture under D3D11.
+The default keytabs above remain authoritative; no platform override changes the
+cleanup's Backspace mappings. Windows tests use a native console helper and cmd.exe
+instead of depending on a Unix shell. See `../docs/WINDOWS.md`.
+
 ## Default Backspace compatibility
 
 The active `lib/kb-layouts/default.keytab` sends DEL (`0x7f`) for Backspace and

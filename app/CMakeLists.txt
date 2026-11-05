@@ -63,6 +63,26 @@ if(APPLE)
     target_link_libraries(cool-retro-term PRIVATE "-framework CoreFoundation" "-framework AppKit")
 endif()
 
+if(WIN32)
+    enable_language(RC)
+    set_target_properties(cool-retro-term PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_sources(cool-retro-term PRIVATE icons/crt.rc)
+
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/../../../bin")
+    add_custom_target(deploy_windows
+        COMMAND "${CMAKE_COMMAND}"
+            "-DAPP_BINARY=$<TARGET_FILE:cool-retro-term>"
+            "-DPLUGIN_BINARY=$<TARGET_FILE:qmltermwidget>"
+            "-DWINDEPLOYQT=${WINDEPLOYQT_EXECUTABLE}"
+            "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
+            "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DCONFIG=$<CONFIG>"
+            -P "${CMAKE_SOURCE_DIR}/cmake/DeployWindows.cmake"
+        DEPENDS cool-retro-term qmltermwidget
+        VERBATIM
+        COMMENT "Stage the application, QML plugin and Qt runtime")
+endif()
+
 # QMLTermWidget is loaded at runtime via QML import path, not linked.
 # Declare explicit dependency so CLion/cmake --build always builds the plugin first.
 add_dependencies(cool-retro-term qmltermwidget)

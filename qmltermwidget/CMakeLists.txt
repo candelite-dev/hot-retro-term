@@ -2,8 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Qml Quick Widgets)
 
-add_library(qmltermwidget MODULE
-    lib/BlockArray.cpp
+set(QMLTERMWIDGET_SOURCES
     lib/ColorScheme.cpp
     lib/Emulation.cpp
     lib/Filter.cpp
@@ -12,11 +11,7 @@ add_library(qmltermwidget MODULE
     lib/KeyboardTranslator.cpp
     lib/konsole_wcwidth.cpp
     lib/kprocess.cpp
-    lib/kpty.cpp
-    lib/kptydevice.cpp
-    lib/kptyprocess.cpp
     lib/ProcessInfo.cpp
-    lib/Pty.cpp
     lib/Screen.cpp
     lib/ScreenWindow.cpp
     lib/Session.cpp
@@ -29,11 +24,20 @@ add_library(qmltermwidget MODULE
     src/qmltermwidget_plugin.cpp
 )
 
-target_compile_definitions(qmltermwidget PRIVATE
-    QTERMWIDGET_LIBRARY
-    HAVE_POSIX_OPENPT
-    HAVE_SYS_TIME_H
-)
+if(WIN32)
+    list(APPEND QMLTERMWIDGET_SOURCES lib/PtyWin.cpp lib/PtyWin.h)
+else()
+    list(APPEND QMLTERMWIDGET_SOURCES lib/BlockArray.cpp lib/kpty.cpp
+        lib/kptydevice.cpp lib/kptyprocess.cpp lib/Pty.cpp)
+endif()
+add_library(qmltermwidget MODULE ${QMLTERMWIDGET_SOURCES})
+target_compile_definitions(qmltermwidget PRIVATE QTERMWIDGET_LIBRARY)
+if(WIN32)
+    target_compile_definitions(qmltermwidget PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
+        _WIN32_WINNT=0x0A00 WINVER=0x0A00 NTDDI_VERSION=0x0A000006)
+else()
+    target_compile_definitions(qmltermwidget PRIVATE HAVE_POSIX_OPENPT HAVE_SYS_TIME_H)
+endif()
 
 if(APPLE)
     target_compile_definitions(qmltermwidget PRIVATE
@@ -59,6 +63,7 @@ target_link_libraries(qmltermwidget PRIVATE
 # applicationDirPath()+"/../../../qmltermwidget" (macOS bundle) to the import path list.
 set_target_properties(qmltermwidget PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qmltermwidget/QMLTermWidget"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qmltermwidget/QMLTermWidget"
 )
 
 # Refresh the copied layouts on incremental builds after a keytab-only edit.

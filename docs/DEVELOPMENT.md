@@ -58,8 +58,10 @@ Restore it later on a dedicated settings branch using `git stash apply`, not `po
 so a failed/conflicting application does not remove the saved copy. Its CMake/QML
 changes will need reviewing against this cleanup.
 
-The cleanup does not merge the Windows port or delete old branches. Its POSIX
-terminal engine is for macOS/Linux; Windows is a separate integration task.
+The table above records the pre-cleanup snapshot. PR #5 merges current master into
+`windows-port` without rewriting its history. Its terminal engine retains the
+cleanup's session ownership and POSIX shutdown fixes alongside the Windows ConPTY
+backend. See [WINDOWS.md](WINDOWS.md) for Windows builds and validation.
 
 ## Dependencies and branches
 

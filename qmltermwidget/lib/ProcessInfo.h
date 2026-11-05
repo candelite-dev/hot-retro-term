@@ -398,6 +398,7 @@ private:
 };
 #endif
 
+#if !defined(Q_OS_WIN)
 /**
  * Lightweight class which provides additional information about SSH processes.
  */
@@ -456,5 +457,6 @@ private:
     QString _port;
     QString _command;
 };
+#endif
 }
 #endif //PROCESSINFO_H

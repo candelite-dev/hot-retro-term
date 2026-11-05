@@ -1,0 +1,53 @@
+if(NOT EXISTS "${WINDEPLOYQT}")
+    message(FATAL_ERROR "windeployqt was not found. Install Qt Windows deployment tools or set WINDEPLOYQT_EXECUTABLE.")
+endif()
+foreach(binary IN ITEMS APP_BINARY PLUGIN_BINARY)
+    if(NOT EXISTS "${${binary}}")
+        message(FATAL_ERROR "Missing deployment input: ${${binary}}")
+    endif()
+endforeach()
+
+# Only this exact child of the build tree may be erased.
+file(REAL_PATH "${BUILD_DIR}" build_root)
+set(stage "${build_root}/windows-stage")
+if(IS_SYMLINK "${stage}")
+    message(FATAL_ERROR "Refusing to clean a symlink staging directory: ${stage}")
+endif()
+set(resolved_stage "${stage}")
+if(EXISTS "${stage}")
+    file(REAL_PATH "${stage}" resolved_stage)
+endif()
+if(NOT resolved_stage STREQUAL stage OR build_root STREQUAL SOURCE_DIR)
+    message(FATAL_ERROR "Unsafe Windows staging path: ${resolved_stage}")
+endif()
+file(REMOVE_RECURSE "${stage}")
+set(plugin_dir "${stage}/qmltermwidget/QMLTermWidget")
+file(MAKE_DIRECTORY "${plugin_dir}" "${stage}/licenses")
+file(COPY "${APP_BINARY}" DESTINATION "${stage}")
+file(COPY "${PLUGIN_BINARY}" DESTINATION "${plugin_dir}")
+file(COPY "${SOURCE_DIR}/qmltermwidget/src/qmldir"
+    "${SOURCE_DIR}/qmltermwidget/src/QMLTermScrollbar.qml" DESTINATION "${plugin_dir}")
+file(COPY "${SOURCE_DIR}/qmltermwidget/lib/kb-layouts"
+    "${SOURCE_DIR}/qmltermwidget/lib/color-schemes" DESTINATION "${plugin_dir}")
+file(COPY "${SOURCE_DIR}/gpl-2.0.txt" "${SOURCE_DIR}/gpl-3.0.txt" DESTINATION "${stage}/licenses")
+file(COPY "${SOURCE_DIR}/qmltermwidget/LICENSE" "${SOURCE_DIR}/qmltermwidget/LICENSE.BSD-3-clause"
+    "${SOURCE_DIR}/qmltermwidget/LICENSE.LGPL2+" DESTINATION "${stage}/licenses/QMLTermWidget")
+file(COPY "${SOURCE_DIR}/KDSingleApplication/LICENSES" DESTINATION "${stage}/licenses/KDSingleApplication")
+file(WRITE "${stage}/qt.conf" "[Paths]\nPrefix=.\nPlugins=.\nQmlImports=qml\n")
+get_filename_component(app_name "${APP_BINARY}" NAME)
+get_filename_component(plugin_name "${PLUGIN_BINARY}" NAME)
+if(CONFIG STREQUAL "Debug")
+    set(deploy_config --debug)
+else()
+    set(deploy_config --release)
+endif()
+# The custom QML plugin is discovered at runtime, so pass both binaries.
+execute_process(COMMAND "${WINDEPLOYQT}" ${deploy_config} --compiler-runtime
+    --verbose 0 --no-translations --qmldir "${SOURCE_DIR}/app/qml"
+    --dir "${stage}" "${stage}/${app_name}" "${plugin_dir}/${plugin_name}"
+    RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "windeployqt failed (${result})")
+endif()
+file(WRITE "${stage}/.hrt-windows-stage" "cool-retro-term\n")
+message(STATUS "Windows deployment staged in ${stage}")

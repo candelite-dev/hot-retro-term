@@ -84,7 +84,11 @@ Session::Session(QObject* parent) :
 
     //create teletype for I/O with shell process
     _shellProcess = new Pty();
+#ifdef Q_OS_WIN
+    ptySlaveFd = -1;
+#else
     ptySlaveFd = _shellProcess->pty()->slaveFd();
+#endif
 
     //create emulation backend
     _emulation = new Vt102Emulation();
@@ -540,6 +544,12 @@ void Session::refresh()
 
 bool Session::sendSignal(int signal)
 {
+#ifdef Q_OS_WIN
+    Q_UNUSED(signal);
+    if (processId() <= 0) return false;
+    _shellProcess->kill();
+    return _shellProcess->waitForFinished(1000);
+#else
     if (processId() <= 0)
     {
         return false;
@@ -555,6 +565,7 @@ bool Session::sendSignal(int signal)
      {
          return false;
      }
+#endif
 }
 
 void Session::close()
@@ -562,6 +573,16 @@ void Session::close()
     _autoClose = true;
     _wantedClose = true;
 
+#ifdef Q_OS_WIN
+    if (_shellProcess->state() != QProcess::NotRunning) {
+        _shellProcess->kill();
+        if (!_shellProcess->waitForFinished(1000))
+            QTimer::singleShot(1, this, SIGNAL(finished()));
+    } else {
+        QTimer::singleShot(1, this, SIGNAL(finished()));
+    }
+    _shellProcess->closePty();
+#else
     if (isRunning())
     {
 #if defined(Q_OS_MAC)
@@ -595,6 +616,7 @@ void Session::close()
         // terminal process has finished, just close the session
         QTimer::singleShot(1, this, SIGNAL(finished()));
     }
+#endif
 }
 
 void Session::sendText(const QString & text) const

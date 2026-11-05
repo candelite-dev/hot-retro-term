@@ -106,6 +106,48 @@ Warnings name the affected entry. `--default-settings` starts with defaults and
 explicitly replaces the current general/appearance entries when the app closes;
 it does not clear custom profiles.
 
+### Windows
+
+Windows builds require Windows 10 version 1809 or later (for ConPTY), Qt 6.10+
+with the `qt5compat` and `qtshadertools` modules, MSVC 2022, and Ninja.
+
+Open an x64 Native Tools Command Prompt for VS 2022, put the Qt MSVC x64 `bin`
+directory on `PATH`, and set `CMAKE_PREFIX_PATH` to that Qt installation. CMake
+3.21+, C++17, and the Ninja single-config generator are required.
+
+```powershell
+cmake --preset windows-msvc
+cmake --build --preset windows-msvc --parallel
+ctest --preset windows-msvc
+```
+
+To stage the application with its Qt runtime and QML dependencies using
+`windeployqt`, run:
+
+```powershell
+cmake --build --preset windows-msvc --target deploy_windows
+./scripts/package-windows.ps1
+./scripts/test-windows-package.ps1
+```
+
+Known limitations and terminal setup notes:
+
+- The executable keeps the Windows GUI subsystem. `--help`, `--version`, and
+  argument errors can be captured through subprocess stdout/stderr; cmd.exe
+  does not wait for a GUI executable by default.
+- The default shell is `%COMSPEC%` (`cmd.exe`). To use PowerShell or WSL, enable
+  the custom command in Settings and specify `powershell` or `wsl.exe`.
+- If a child program displays garbled characters, run `chcp 65001` before
+  starting it.
+- WSL clipboard/input problems (D2) and the NVIDIA D3D11 split-resize crash (D3)
+  remain open. See [Windows validation](docs/WINDOWS.md) for evidence and repro commands.
+
+Deployment uses [Qt's Windows deployment tooling](https://doc.qt.io/qt-6.10/windows-deployment.html).
+Only `build/windows-msvc/windows-stage` is packaged. `windeployqt` collects Qt/QML
+dependencies and the compiler redistributable; on a machine without the MSVC
+runtime, install the included `vc_redist.x64.exe`. Manual Windows/release workflow
+runs validate artifacts without publishing a release.
+
 ## Credits
 
 Based on [cool-retro-term](https://github.com/Swordfish90/cool-retro-term) by [Swordfish90](https://github.com/Swordfish90).

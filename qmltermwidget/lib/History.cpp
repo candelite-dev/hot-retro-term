@@ -27,8 +27,12 @@
 #include <cstdlib>
 #include <cstdio>
 #include <sys/types.h>
+#ifdef Q_OS_WIN
+#include <io.h>
+#else
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
 #include <cerrno>
 
 #include <QtDebug>
@@ -39,7 +43,13 @@
 
 // Reasonable line size
 #define LINE_SIZE    1024
+#ifdef Q_OS_WIN
+#define KDE_lseek _lseek
+#define read _read
+#define write _write
+#else
 #define KDE_lseek lseek
+#endif
 
 using namespace Konsole;
 
@@ -113,6 +123,9 @@ void HistoryFile::map()
 {
     Q_ASSERT( fileMap == nullptr );
 
+#ifdef Q_OS_WIN
+    return;
+#else
     fileMap = (char*)mmap( nullptr , length , PROT_READ , MAP_PRIVATE , ion , 0 );
 
     //if mmap'ing fails, fall back to the read-lseek combination
@@ -122,14 +135,19 @@ void HistoryFile::map()
             fileMap = nullptr;
             //qDebug() << __FILE__ << __LINE__ << ": mmap'ing history failed.  errno = " << errno;
     }
+#endif
 }
 
 void HistoryFile::unmap()
 {
+#ifdef Q_OS_WIN
+    return;
+#else
     int result = munmap( fileMap , length );
     Q_ASSERT( result == 0 ); Q_UNUSED( result )
 
     fileMap = nullptr;
+#endif
 }
 
 bool HistoryFile::isMapped() const
@@ -463,6 +481,7 @@ void HistoryScrollNone::addLine(bool)
 
 // History Scroll BlockArray //////////////////////////////////////
 
+#ifndef Q_OS_WIN
 HistoryScrollBlockArray::HistoryScrollBlockArray(size_t size)
   : HistoryScroll(new HistoryTypeBlockArray(size))
 {
@@ -531,6 +550,7 @@ void HistoryScrollBlockArray::addCells(const Character a[], int count)
 void HistoryScrollBlockArray::addLine(bool)
 {
 }
+#endif
 
 ////////////////////////////////////////////////////////////////
 // Compact History Scroll //////////////////////////////////////
@@ -819,6 +839,7 @@ int HistoryTypeNone::maximumLineCount() const
 
 //////////////////////////////
 
+#ifndef Q_OS_WIN
 HistoryTypeBlockArray::HistoryTypeBlockArray(size_t size)
   : m_size(size)
 {
@@ -839,6 +860,7 @@ HistoryScroll* HistoryTypeBlockArray::scroll(HistoryScroll *old) const
   delete old;
   return new HistoryScrollBlockArray(m_size);
 }
+#endif
 
 
 //////////////////////////////

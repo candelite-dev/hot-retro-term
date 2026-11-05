@@ -31,11 +31,18 @@
 //#include <ktemporaryfile.h>
 
 // Konsole
+#ifndef Q_OS_WIN
 #include "BlockArray.h"
+#endif
 #include "Character.h"
 
 // map
+#ifdef Q_OS_WIN
+#include <cstdlib>
+#endif
+#ifndef Q_OS_WIN
 #include <sys/mman.h>
+#endif
 
 namespace Konsole
 {
@@ -239,6 +246,7 @@ public:
 //////////////////////////////////////////////////////////////////////
 // BlockArray-based history
 //////////////////////////////////////////////////////////////////////
+#ifndef Q_OS_WIN
 class HistoryScrollBlockArray : public HistoryScroll
 {
 public:
@@ -257,6 +265,7 @@ protected:
   mutable BlockArray m_blockArray;
   QHash<int,size_t> m_lineLengths;
 };
+#endif
 
 //////////////////////////////////////////////////////////////////////
 // History using compact storage
@@ -293,16 +302,25 @@ public:
 
   CompactHistoryBlock(){
     blockLength = 4096*64; // 256kb
+#ifdef Q_OS_WIN
+    head = (quint8*) std::malloc(blockLength);
+    Q_ASSERT(head != nullptr);
+#else
     head = (quint8*) mmap(nullptr, blockLength, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
     //head = (quint8*) malloc(blockLength);
     Q_ASSERT(head != MAP_FAILED);
+#endif
     tail = blockStart = head;
     allocCount=0;
   }
 
   virtual ~CompactHistoryBlock(){
+#ifdef Q_OS_WIN
+    std::free(blockStart);
+#else
     //free(blockStart);
     munmap(blockStart, blockLength);
+#endif
   }
 
   virtual unsigned int remaining(){ return blockStart+blockLength-tail;}
@@ -424,6 +442,7 @@ public:
   HistoryScroll* scroll(HistoryScroll *) const override;
 };
 
+#ifndef Q_OS_WIN
 class HistoryTypeBlockArray : public HistoryType
 {
 public:
@@ -437,6 +456,7 @@ public:
 protected:
   size_t m_size;
 };
+#endif
 
 #if 1
 class HistoryTypeFile : public HistoryType

@@ -67,3 +67,4 @@ build
 # Local agent and IDE indexes
 /.codex/
 /.cache/
+/.worktrees/

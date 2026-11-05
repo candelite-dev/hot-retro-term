@@ -76,12 +76,17 @@ Konsole::Session *KSession::createSession(QString name)
 
     //cool-old-term: There is another check in the code. Not sure if useful.
 
+#ifdef Q_OS_WIN
+    const QString shellProg = qEnvironmentVariable("COMSPEC", QStringLiteral("cmd.exe"));
+#else
     const QByteArray envshell = qgetenv("SHELL");
-    const QString shellProg = envshell.isEmpty() ? QStringLiteral("/bin/bash") : QString::fromUtf8(envshell);
+    const QString shellProg = envshell.isEmpty() ? QStringLiteral("/bin/bash")
+                                                 : QString::fromUtf8(envshell);
+#endif
     m_shellProgram = shellProg;
     session->setProgram(shellProg);
 
-    setenv("TERM", "xterm", 1);
+    qputenv("TERM", QByteArrayLiteral("xterm"));
 
     //session->setProgram();
 

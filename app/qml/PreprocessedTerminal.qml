@@ -278,12 +278,18 @@ Item{
 
             Connections {
                 target: kterminal
-                // Only needed until the first output; without this gate the
-                // handler would run for every PTY block for the session's life.
-                enabled: bootOverlay.visible
                 function onReceivedData(text) {
                     bootOverlay.visible = false
                 }
+            }
+
+            // Safety net: the receivedData pulse is the primary trigger, but if
+            // it is ever missed the overlay must not blink forever. The shell
+            // always produces output well within this window.
+            Timer {
+                running: bootOverlay.visible
+                interval: 1500
+                onTriggered: bootOverlay.visible = false
             }
         }
 

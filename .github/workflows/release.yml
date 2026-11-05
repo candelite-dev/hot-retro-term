@@ -83,12 +83,18 @@ jobs:
           name: cool-retro-term-dmg
           path: ./release/*
 
+  build-windows:
+    uses: ./.github/workflows/windows.yml
+
   release:
+    # Manual runs validate artifacts only. Publishing remains a push/tag operation.
+    if: github.event_name == 'push'
     name: Create Release
     runs-on: ubuntu-22.04
     needs:
       - build-appimage
       - build-dmg
+      - build-windows
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,6 +110,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cool-retro-term-dmg
+          path: ./release
+
+      - name: Download Windows ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: cool-retro-term-win64
           path: ./release
 
       - name: Update rolling tag
