@@ -76,6 +76,21 @@ void FontManager::refresh()
     updateComputedFont();
 }
 
+QFont FontManager::cellAlignedFont(const QFont &font, int cellWidth) const
+{
+    QFont aligned = font;
+    if (cellWidth <= 0)
+        return aligned;
+
+    // TerminalDisplay positions characters on an integer grid. Native text
+    // layout can retain fractional advances even with full hinting (macOS).
+    // Keep the terminal's font settings and only align its monospaced advance.
+    aligned.setLetterSpacing(QFont::AbsoluteSpacing, 0);
+    const qreal advance = QFontMetricsF(aligned).horizontalAdvance(QLatin1Char('M'));
+    aligned.setLetterSpacing(QFont::AbsoluteSpacing, cellWidth - advance);
+    return aligned;
+}
+
 FontListModel *FontManager::fontList()
 {
     return &m_fontListModel;

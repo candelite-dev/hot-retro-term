@@ -80,6 +80,12 @@ patterns. Measuring output size uses the effect's own bounds, not the whole wind
 item. It must use the same margins, scaling, and tab-bar position as the renderer.
 `curvatureinputfilter.cpp` handles distortion before those input events arrive.
 
+`AsciiTabBar` uses the focused terminal's native font, line spacing, and cell metrics.
+`FontManager.cellAlignedFont` copies that font and adjusts letter spacing to the
+terminal's rounded cell width. Native text rendering preserves hinting and the
+terminal's antialiasing choice. `screenScaling` scales the whole row to the displayed
+cell size, which also drives backgrounds, truncation, and hit testing.
+
 `app/shaders/` contains the GLSL sources and committed `.qsb` binaries. After editing
 a shader, run `cmake --build build/dev --target compile_shaders`, then rebuild.
 Shader regeneration is currently explicit, not automatic.

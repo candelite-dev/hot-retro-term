@@ -16,7 +16,6 @@ var schema = [
     { k: "useCustomCommand",  p: "useCustomCommand",  scope: "settings", type: "bool" },
     { k: "customCommand",     p: "customCommand",     scope: "settings", type: "string" },
     { k: "windowCurvature",   p: "windowCurvature",   scope: "settings", type: "real", min: 0, max: 1 },
-    { k: "tabBarScale",       p: "tabBarScale",       scope: "settings", type: "real", positive: true },
     { k: "backgroundColor",   p: "_backgroundColor",  scope: "profile", type: "color" },
     { k: "fontColor",         p: "_fontColor",        scope: "profile", type: "color" },
     { k: "flickering",        p: "flickering",        scope: "profile", type: "real", min: 0, max: 1 },

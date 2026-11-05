@@ -112,4 +112,20 @@ TestCase {
     function test_unknownKeysAreIgnored() {
         compare(Codec.parseSettings('{"future":123,"bloom":0.4}', 'profile'), {bloom:0.4})
     }
+    function test_legacyTabBarScaleIsIgnored_data() {
+        return [{tag: "old default", value: 3}, {tag: "custom", value: 5},
+                {tag: "invalid obsolete value", value: "unused"}]
+    }
+    function test_legacyTabBarScaleIsIgnored(data) {
+        fakeStorage.entries = ({_CURRENT_SETTINGS: JSON.stringify({
+            windowScaling: 0.8, tabBarScale: data.value
+        })})
+        persistence.loadCurrent()
+        compare(values.windowScaling, 0.8)
+        compare(warnings.count, 0)
+        verify(persistence.storeCurrent())
+        var saved = JSON.parse(fakeStorage.entries._CURRENT_SETTINGS)
+        compare(saved.windowScaling, 0.8)
+        verify(!saved.hasOwnProperty("tabBarScale"))
+    }
 }

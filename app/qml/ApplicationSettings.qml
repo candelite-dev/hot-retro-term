@@ -55,8 +55,6 @@ QtObject {
 
     property real windowCurvature: 0.0
 
-    property real tabBarScale: 3.0
-
     property bool blinkingCursor: false
 
 

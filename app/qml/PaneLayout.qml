@@ -65,6 +65,7 @@ Item {
 
         AsciiTabBar {
             id: sharedTabBar
+            objectName: "sharedTabBar"
             anchors.top: parent.top
             anchors.left: parent.left
             width: parent.width
@@ -74,16 +75,16 @@ Item {
             tabTitles: splitManager ? splitManager.collectTitles() : []
             fontColor: appSettings.fontColor
             backgroundColor: appSettings.backgroundColor
-            height: visible ? paneLayout._charMetrics.height * appSettings.tabBarScale : 0
             charMetrics: Qt.size(
-                paneLayout._charMetrics.width  * appSettings.tabBarScale,
-                paneLayout._charMetrics.height * appSettings.tabBarScale
+                paneLayout._charMetrics.width  * paneLayout._screenScaling,
+                paneLayout._charMetrics.height * paneLayout._screenScaling
             )
-            termFont: Qt.font({
-                family: paneLayout._termFont.family,
-                pixelSize: (paneLayout._termFont.pixelSize > 0
-                            ? paneLayout._termFont.pixelSize : 16) * appSettings.tabBarScale
-            })
+            screenScaling: paneLayout._screenScaling
+            termFont: appSettings.fontManager.cellAlignedFont(paneLayout._termFont,
+                                                             paneLayout._charMetrics.width)
+            lineSpacing: paneLayout._ft && paneLayout._ft.mainTerminal
+                         ? paneLayout._ft.mainTerminal.lineSpacing : 0
+            textAntialiasing: !appSettings.lowResolutionFont
             z: 5
 
             // Non-unified-CRT path: tab bar handles its own clicks

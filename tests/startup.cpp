@@ -1,12 +1,15 @@
 #include <QApplication>
 #include <QColor>
 #include <QDir>
+#include <QFontMetrics>
+#include <QFontMetricsF>
 #include <QImage>
 #include <QJSValue>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QResource>
 #include <QRegularExpression>
@@ -91,6 +94,58 @@ struct AppFixture {
 
 class StartupTest : public QObject {
     Q_OBJECT
+    QList<QQuickItem *> visualItems(QQuickItem *parent, const QString &name) {
+        QList<QQuickItem *> found;
+        for (auto *child : parent->childItems()) {
+            if (child->objectName() == name) found.append(child);
+            found.append(visualItems(child, name));
+        }
+        return found;
+    }
+    void verifyTabFont(AppFixture &app) {
+        auto *bar = app.window()->findChild<QQuickItem *>("sharedTabBar");
+        QVERIFY(bar);
+        auto *terminal = app.evaluate("tabs.focusedTerminal.mainTerminal").toQObject();
+        QVERIFY(terminal);
+        const auto cells = terminal->property("fontMetrics").toSize();
+        const auto font = terminal->property("font").value<QFont>();
+        const auto scale = app.evaluate("tabs.focusedTerminal.screenScaling").toNumber();
+        const QSizeF displayed(cells.width() * scale, cells.height() * scale);
+        QTRY_COMPARE(bar->property("charMetrics").toSizeF(), displayed);
+        QCOMPARE(bar->height(), displayed.height());
+        QCOMPARE(bar->property("screenScaling").toReal(), scale);
+
+        const auto labels = visualItems(bar, "tabLabel");
+        QVERIFY(!labels.isEmpty());
+        for (auto *label : labels + visualItems(bar, "addTabLabel")) {
+            const auto aligned = label->property("font").value<QFont>();
+            auto restored = aligned;
+            restored.setLetterSpacing(font.letterSpacingType(), font.letterSpacing());
+            QCOMPARE(restored, font); // Includes native size, weight, kerning and hinting.
+            QCOMPARE(label->property("antialiasing").toBool(), terminal->property("antialiasText").toBool());
+            QCOMPARE(label->property("renderType").toInt(), 1); // Text.NativeRendering
+            QCOMPARE(label->property("textFormat").toInt(), 0); // Text.PlainText
+            const auto baseline = label->y() + label->property("baselineOffset").toReal();
+            const auto expected = QFontMetrics(font).ascent() + terminal->property("lineSpacing").toInt();
+            QVERIFY(qAbs(baseline - expected) < 0.01);
+            const auto text = label->property("text").toString();
+            QVERIFY(!text.isEmpty());
+            const auto advance = QFontMetricsF(aligned).horizontalAdvance(text);
+            QVERIFY2(qAbs(advance - text.size() * cells.width()) < 0.1,
+                     qPrintable(QString("Long label drift: %1 vs %2").arg(advance).arg(text.size() * cells.width())));
+            QVERIFY(qAbs(label->property("advance").toSizeF().width() - advance) < 0.1);
+            const auto displayedWidth = label->mapToItem(bar, QPointF(label->width(), 0)).x()
+                                      - label->mapToItem(bar, QPointF(0, 0)).x();
+            QVERIFY(qAbs(displayedWidth - text.size() * displayed.width()) < 0.1);
+        }
+        // Active background and clipping rectangle use the same displayed grid.
+        const auto tabWidth = bar->property("tabPixelWidth").toReal();
+        const auto *tab = labels.first()->parentItem();
+        QVERIFY(tab->clip());
+        QVERIFY(qAbs(tab->width() * scale - tabWidth) < 0.01);
+        QVERIFY(qAbs(tab->height() * scale - displayed.height()) < 0.01);
+    }
+
 private slots:
     void init() {
         QTest::failOnWarning(QRegularExpression("QProcess: Destroyed while process.*"));
@@ -161,6 +216,120 @@ private slots:
                      "tabs.focusedTerminal.virtualResolution.width * 0.5,"
                      "tabs.focusedTerminal.virtualResolution.height * 0.5)");
         QCOMPARE(app.evaluate("effect.rasterizationIntensity").toNumber(), 0.0);
+    }
+    void tabFontMatchesTerminal_data() {
+        QTest::addColumn<QString>("fontName");
+        QTest::addColumn<int>("rasterization");
+        QTest::addColumn<qreal>("zoom");
+        for (const auto &name : {QString("IBM_VGA_8x16"), QString("TERMINESS_SCALED"), QString("JETBRAINS_MONO")}) {
+            for (const qreal zoom : {0.65, 1.0, 1.5}) {
+                const auto row = QString("%1-%2").arg(name).arg(zoom);
+                QTest::newRow(qPrintable(row)) << name << (name == "JETBRAINS_MONO" ? 4 : 1) << zoom;
+            }
+        }
+    }
+    void tabFontMatchesTerminal() {
+        QFETCH(QString, fontName);
+        QFETCH(int, rasterization);
+        QFETCH(qreal, zoom);
+        AppFixture app;
+        app.load();
+        QVERIFY(!app.engine.rootObjects().isEmpty());
+        auto *tabs = app.window()->findChild<QObject *>("terminalTabs");
+        QVERIFY(tabs);
+        app.engine.globalObject().setProperty("tabs", app.engine.newQObject(tabs));
+        QTRY_VERIFY(app.evaluate("tabs.focusedTerminal !== null").toBool());
+        app.evaluate("tabs.addTab()");
+        QTRY_COMPARE(app.evaluate("tabs.count").toInt(), 2);
+        auto *bar = app.window()->findChild<QQuickItem *>("sharedTabBar");
+        QVERIFY(bar);
+        app.engine.globalObject().setProperty("bar", app.engine.newQObject(bar));
+        // A long, repeated label makes even small fractional advances accumulate.
+        app.evaluate("bar.tabTitles = ['MW0123456789'.repeat(100), '<b>plain</b>']");
+        app.evaluate(QString("root.appSettings.loadProfileString("
+                             "'{\"fontSource\":0,\"fontName\":\"%1\",\"rasterization\":%2,\"lineSpacing\":0.1}')")
+                         .arg(fontName).arg(rasterization));
+        app.evaluate(QString("root.appSettings.fontScaling = %1").arg(zoom));
+        auto *window = qobject_cast<QQuickWindow *>(app.window());
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        verifyTabFont(app);
+        QVERIFY(app.evaluate("bar.buildTabLabel(0).indexOf('…') >= 0").toBool());
+        QCOMPARE(app.evaluate("bar.buildTabLabel(0).length === bar.charsPerTab").toBool(), true);
+
+        // Resize, focus a split, and switch tabs without losing the font binding.
+        window->resize(1000, 700);
+        QTRY_VERIFY(bar->width() > 900);
+        verifyTabFont(app);
+        app.evaluate("tabs.splitPane(Qt.Horizontal)");
+        QTRY_VERIFY(app.evaluate("tabs.isSplitMode").toBool());
+        verifyTabFont(app);
+        app.evaluate("tabs.currentIndex = 0");
+        QTRY_COMPARE(app.evaluate("tabs.currentIndex").toInt(), 0);
+        verifyTabFont(app);
+
+        // Exercise the real InputRouter at displayed tab and [+] coordinates.
+        app.evaluate("root.appSettings.screenCurvature = 0; root.appSettings.windowCurvature = 0");
+        auto point = bar->mapToScene(QPointF(bar->property("tabPixelWidth").toReal() * 1.5, bar->height() / 2));
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point.toPoint());
+        QTRY_COMPARE(app.evaluate("tabs.currentIndex").toInt(), 1);
+        const qreal addX = 2 * bar->property("tabPixelWidth").toReal() + bar->property("charMetrics").toSizeF().width() * 2;
+        point = bar->mapToScene(QPointF(addX, bar->height() / 2));
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point.toPoint());
+        QTRY_COMPARE(app.evaluate("tabs.count").toInt(), 3);
+        verifyTabFont(app);
+
+        // Optional standard/Retina captures for desktop and offscreen review.
+        const auto prefix = qEnvironmentVariable("HRT_TEST_TAB_SCREENSHOTS");
+        if (!prefix.isEmpty()) {
+            qInfo() << "Capture device pixel ratio:" << window->devicePixelRatio();
+            app.engine.globalObject().setProperty("layout", app.engine.newQObject(bar->parentItem()->parentItem()));
+            app.engine.globalObject().setProperty("shared", app.engine.newQObject(app.window()->findChild<QObject *>("unifiedCRT")));
+            app.evaluate("tabs.focusedTerminal.mainTerminal.session.sendText('MW0123456789 MW0123456789 MW0123456789\\n')");
+            QTRY_VERIFY(app.evaluate("tabs.focusedTerminal.mainTerminal.session.history.indexOf('MW0123456789') >= 0").toBool());
+            app.evaluate("root.appSettings.loadProfileString('{\"ambientLight\":0,\"bloom\":0,\"burnIn\":0,"
+                         "\"flickering\":0,\"glowingLine\":0,\"horizontalSync\":0,\"jitter\":0,\"rgbShift\":0,"
+                         "\"screenCurvature\":0,\"staticNoise\":0,\"frameSize\":0,\"frameShininess\":0}')");
+            for (const bool effects : {false, true}) {
+                // Show the shared source directly for a comparison before CRT
+                // distortion. Do not change rasterization: that selects fonts.
+                app.evaluate(effects ? "layout.paneSource.hideSource = true; shared.visible = true"
+                                     : "layout.paneSource.hideSource = false; shared.visible = false");
+                if (effects) app.evaluate("root.appSettings.bloom = 0.3; root.appSettings.screenCurvature = 0.2");
+                QTest::qWait(100);
+                const auto frame = window->grabWindow();
+                QVERIFY(!frame.isNull());
+                QVERIFY(frame.save(QString("%1-%2-%3-%4.png").arg(prefix, fontName).arg(zoom).arg(effects ? "crt" : "plain")));
+            }
+        }
+    }
+    void tabFontFollowsLiveProfileAndSpacingChanges() {
+        AppFixture app;
+        app.load();
+        QVERIFY(!app.engine.rootObjects().isEmpty());
+        auto *tabs = app.window()->findChild<QObject *>("terminalTabs");
+        QVERIFY(tabs);
+        app.engine.globalObject().setProperty("tabs", app.engine.newQObject(tabs));
+        app.evaluate("tabs.addTab()");
+        QVERIFY(QTest::qWaitForWindowExposed(qobject_cast<QQuickWindow *>(app.window())));
+        for (const auto &name : {"IBM_VGA_8x16", "JETBRAINS_MONO", "TERMINESS_SCALED"}) {
+            app.evaluate(QString("root.appSettings.loadProfileString("
+                                 "'{\"fontName\":\"%1\",\"rasterization\":%2,\"lineSpacing\":0.3}')")
+                             .arg(name).arg(QString(name) == "JETBRAINS_MONO" ? 4 : 1));
+            app.evaluate("root.appSettings.fontScaling = 0.65");
+            verifyTabFont(app);
+            app.evaluate("root.appSettings.fontScaling = 1.5; root.appSettings.lineSpacing = 0");
+            verifyTabFont(app);
+        }
+    }
+    void legacyTabScaleDoesNotAffectStartup() {
+        AppFixture app;
+        QVERIFY(app.seed("_CURRENT_SETTINGS", "{\"tabBarScale\":5,\"windowScaling\":0.8}"));
+        app.load();
+        QVERIFY(!app.engine.rootObjects().isEmpty());
+        QCOMPARE(app.evaluate("root.appSettings.windowScaling").toNumber(), 0.8);
+        QVERIFY(app.evaluate("root.appSettings.tabBarScale === undefined").toBool());
+        QVERIFY(app.evaluate("root.appSettings.storeSettings()").toBool());
+        QVERIFY(!app.read("_CURRENT_SETTINGS").contains("tabBarScale"));
     }
     void sharedRasterizationKeepsFontPixelGrid_data() {
         QTest::addColumn<bool>("split");

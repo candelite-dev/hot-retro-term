@@ -22,7 +22,7 @@ Divide the terminal into multiple panes, each running its own shell session.
 A fuzzy-searchable command palette rendered entirely in ASCII art using your terminal font. Access all commands, toggle CRT effects, switch profiles, and more — without leaving the keyboard.
 
 ### ASCII Tab Bar
-The tab bar renders inside the CRT shader pipeline (not as native OS chrome), so it inherits all CRT effects including curvature, bloom, and scan lines. Appears automatically when more than one tab is open.
+The tab bar renders inside the CRT shader pipeline, so it inherits all CRT effects including curvature, bloom, and scan lines. It appears automatically when more than one tab is open and always follows the focused terminal's font and zoom. Each character uses the terminal's displayed cell dimensions, and the bar is exactly one terminal row tall. Font and profile changes update it immediately; there is no separate tab scale setting. Older saved `tabBarScale` values are ignored. Dimensions match before CRT distortion; curvature can change their apparent size by screen position.
 
 ### Window Curvature
 A barrel distortion effect applied to the entire window — including the tab bar and all split panes — giving the whole interface a single unified CRT curve.

@@ -28,7 +28,7 @@ add_dependencies(hrt_startup_test qmltermwidget)
 add_test(NAME app_startup COMMAND hrt_startup_test)
 set_tests_properties(app_startup PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QML_DISABLE_DISK_CACHE=1"
-    TIMEOUT 30
+    TIMEOUT 60
 )
 
 qt_add_executable(hrt_launchoptions_test launchoptions_test.cpp ../app/launchoptions.cpp)

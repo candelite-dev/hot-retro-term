@@ -2,6 +2,7 @@
 #define FONTMANAGER_H
 
 #include <QObject>
+#include <QFont>
 #include <QStringList>
 #include <QHash>
 #include <QSet>
@@ -29,6 +30,7 @@ public:
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void emitCurrentFont();
+    Q_INVOKABLE QFont cellAlignedFont(const QFont &font, int cellWidth) const;
 
     FontListModel *fontList();
     FontListModel *filteredFontList();

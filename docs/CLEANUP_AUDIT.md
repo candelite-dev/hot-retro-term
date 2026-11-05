@@ -80,6 +80,19 @@ Five startup regression cases reproduce the old failures and verify the 65%
 Retina case and consistent grids through tab/split transitions at small/large
 font scales. These test QML values; native GPU appearance still needs desktop review.
 
+## Tab font matching follow-up — 2026-11-04
+
+The tab bar now follows the focused terminal's font and zoom automatically. It uses
+one displayed terminal row, native font rendering with matching antialiasing, and
+letter spacing aligned to the terminal's integer cell width. The separate tab scale
+control and persisted key have been removed; legacy values are ignored.
+
+Startup regressions cover IBM VGA, Terminess, and JetBrains Mono at 65%, 100%, and
+150%, including long-label advances, baselines, cell dimensions, profile/spacing
+changes, resizing, split/tab transitions, and real tab/add-button clicks. Settings
+tests verify that legacy scale values do not block healthy settings or survive the
+next save. The full five-suite headless regression run passes.
+
 ## Remaining work, in priority order
 
 1. **TerminalDisplay boundaries.** Its ~4,000 lines mix painting, selection, input,

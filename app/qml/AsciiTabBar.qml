@@ -18,7 +18,7 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *******************************************************************************/
 
-import QtQuick 2.2
+import QtQuick
 
 Item {
     id: root
@@ -30,8 +30,21 @@ Item {
     property color backgroundColor: "#000000"
     property size charMetrics: Qt.size(8, 16)
     property font termFont
+    property real screenScaling: 1
+    property int lineSpacing: 0
+    property bool textAntialiasing: true
+
+    // charMetrics and hit tests use displayed pixels. Text is laid out at the
+    // terminal's native font size, then scaled just like the terminal item.
+    readonly property real textBaseline: lineSpacing + Math.round(labelMetrics.ascent)
+
+    FontMetrics {
+        id: labelMetrics
+        font: root.termFont
+    }
 
     visible: tabCount > 1
+    height: visible ? charMetrics.height : 0
     z: 10
 
     // Number of chars for the [+] button
@@ -52,15 +65,18 @@ Item {
 
     Row {
         id: tabsRow
-        height: parent.height
+        height: root.charMetrics.height / root.screenScaling
+        transformOrigin: Item.TopLeft
+        scale: root.screenScaling
 
         Repeater {
             model: root.tabCount
 
             Item {
                 id: tabItem
-                width: root.tabPixelWidth
-                height: root.charMetrics.height
+                width: root.tabPixelWidth / root.screenScaling
+                height: tabsRow.height
+                clip: true
 
                 readonly property bool isActive: index === root.activeTabIndex
 
@@ -71,12 +87,15 @@ Item {
                 }
 
                 Text {
-                    anchors.fill: parent
+                    objectName: "tabLabel"
+                    width: parent.width
+                    y: root.textBaseline - baselineOffset
                     text: root.buildTabLabel(index)
+                    textFormat: Text.PlainText
                     font: root.termFont
                     color: tabItem.isActive ? root.backgroundColor : root.fontColor
-                    verticalAlignment: Text.AlignVCenter
-                    clip: true
+                    renderType: Text.NativeRendering
+                    antialiasing: root.textAntialiasing
                     smooth: false
                 }
             }
@@ -84,12 +103,15 @@ Item {
 
         Text {
             id: addBtn
-            width: root.addBtnPixelWidth
-            height: root.charMetrics.height
+            objectName: "addTabLabel"
+            width: root.addBtnPixelWidth / root.screenScaling
+            y: root.textBaseline - baselineOffset
             text: " [+] "
+            textFormat: Text.PlainText
             font: root.termFont
             color: root.fontColor
-            verticalAlignment: Text.AlignVCenter
+            renderType: Text.NativeRendering
+            antialiasing: root.textAntialiasing
             smooth: false
         }
     }
