@@ -28,12 +28,16 @@
         <file>AsciiTabBar.qml</file>
         <file>AsciiDivider.qml</file>
         <file>AsciiFocusBorder.qml</file>
-        <file>PaneTreeNode.qml</file>
-        <file>PaneSplitContainer.qml</file>
+        <file>TerminalPane.qml</file>
+        <file>TerminalSessionPool.qml</file>
+        <file>SplitTree.js</file>
         <file>CommandPalette.qml</file>
         <file>images/crt256.png</file>
         <file>utils.js</file>
         <file>SettingsSchema.js</file>
+        <file>SettingsCodec.js</file>
+        <file>SettingsPersistence.qml</file>
+        <file>ProfileCatalog.qml</file>
         <file>images/allNoise512.png</file>
         <file>fonts/fixedsys-excelsior/FSEX301-L2.ttf</file>
         <file>fonts/cozette/CozetteVector.ttf</file>

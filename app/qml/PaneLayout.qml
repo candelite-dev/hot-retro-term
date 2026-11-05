@@ -22,6 +22,7 @@ import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 
 import "utils.js" as Utils
+import "SplitTree.js" as Tree
 
 // Visual composition layer: shared tab bar + pane stack + unified CRT pipeline.
 // splitManager (SplitTreeModel) drives all content.
@@ -29,6 +30,9 @@ Item {
     id: paneLayout
 
     property var splitManager: null  // SplitTreeModel
+
+    property Item terminalPool: null
+    property alias paneArea: paneStack
 
     signal tabClicked(int index)
     signal addTabClicked()
@@ -41,15 +45,16 @@ Item {
     // ── Font metrics from focused terminal ────────────────────────────────────
 
     property var  _ft: splitManager ? splitManager.getTerminal(splitManager.focusedPaneId) : null
+    readonly property real _screenScaling: _ft ? _ft.screenScaling : 1
     property size _charMetrics: _ft && _ft.mainTerminal ? _ft.mainTerminal.fontMetrics : Qt.size(8, 16)
     property font _termFont:    _ft && _ft.mainTerminal ? _ft.mainTerminal.font
                                                         : Qt.font({family: "monospace", pixelSize: 16})
     property var _currentTree: splitManager ? splitManager.splitTrees[splitManager.currentIndex] : null
     property var _paneRects: (splitManager && _currentTree)
-                             ? splitManager.computePaneRects(_currentTree, 0, 0, 1, 1)
+                             ? Tree.computePaneRects(_currentTree, 0, 0, 1, 1)
                              : []
     property var _splitBoundaries: (splitManager && _currentTree)
-                                   ? splitManager.computeSplitBoundaries(_currentTree, 0, 0, 1, 1)
+                                   ? Tree.computeSplitBoundaries(_currentTree, 0, 0, 1, 1)
                                    : []
 
     // ── crtContent: captured as unified CRT source ────────────────────────────
@@ -60,6 +65,7 @@ Item {
 
         AsciiTabBar {
             id: sharedTabBar
+            objectName: "sharedTabBar"
             anchors.top: parent.top
             anchors.left: parent.left
             width: parent.width
@@ -69,16 +75,16 @@ Item {
             tabTitles: splitManager ? splitManager.collectTitles() : []
             fontColor: appSettings.fontColor
             backgroundColor: appSettings.backgroundColor
-            height: visible ? paneLayout._charMetrics.height * appSettings.tabBarScale : 0
             charMetrics: Qt.size(
-                paneLayout._charMetrics.width  * appSettings.tabBarScale,
-                paneLayout._charMetrics.height * appSettings.tabBarScale
+                paneLayout._charMetrics.width  * paneLayout._screenScaling,
+                paneLayout._charMetrics.height * paneLayout._screenScaling
             )
-            termFont: Qt.font({
-                family: paneLayout._termFont.family,
-                pixelSize: (paneLayout._termFont.pixelSize > 0
-                            ? paneLayout._termFont.pixelSize : 16) * appSettings.tabBarScale
-            })
+            screenScaling: paneLayout._screenScaling
+            termFont: appSettings.fontManager.cellAlignedFont(paneLayout._termFont,
+                                                             paneLayout._charMetrics.width)
+            lineSpacing: paneLayout._ft && paneLayout._ft.mainTerminal
+                         ? paneLayout._ft.mainTerminal.lineSpacing : 0
+            textAntialiasing: !appSettings.lowResolutionFont
             z: 5
 
             // Non-unified-CRT path: tab bar handles its own clicks
@@ -114,15 +120,11 @@ Item {
                     width: Math.round(rectData.w * paneStack.width)
                     height: Math.round(rectData.h * paneStack.height)
 
-                    PaneTreeNode {
+                    TerminalPane {
                         anchors.fill: parent
-                        treeData: ({
-                            type: "terminal",
-                            paneId: paneSlot.rectData.paneId,
-                            _showDividerRight: false,
-                            _showDividerBottom: false
-                        })
+                        paneId: paneSlot.rectData.paneId
                         splitManager: paneLayout.splitManager
+                        terminalPool: paneLayout.terminalPool
                     }
                 }
             }
@@ -172,6 +174,7 @@ Item {
 
     ShaderTerminal {
         id: unifiedCRT
+        objectName: "unifiedCRT"
         anchors.fill: parent
         visible: splitManager ? splitManager.needsUnifiedCRT : false
         enabled: false
@@ -181,10 +184,16 @@ Item {
         source: unifiedPaneSource
         burnInEffect: unifiedBurnIn
         bloomSource: unifiedBloomSourceLoader.item
-        virtualResolution: Qt.size(paneStack.width, paneStack.height)
+        // Every pane shares the font settings. Keep the terminal pixel grid
+        // when capturing the whole layout, including its tab bar; window
+        // dimensions alone made the mask denser and suppressed rasterization.
+        virtualResolution: Qt.size(
+            Math.floor(crtContent.width / paneLayout._screenScaling),
+            Math.floor(crtContent.height / paneLayout._screenScaling)
+        )
         screenResolution: Qt.size(
-            terminalWindow.width  * Screen.devicePixelRatio * appSettings.windowScaling,
-            terminalWindow.height * Screen.devicePixelRatio * appSettings.windowScaling
+            unifiedCRT.width  * Screen.devicePixelRatio * appSettings.windowScaling,
+            unifiedCRT.height * Screen.devicePixelRatio * appSettings.windowScaling
         )
     }
 

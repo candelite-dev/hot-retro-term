@@ -18,156 +18,134 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *******************************************************************************/
 import QtQuick
+import "SplitTree.js" as Tree
 
-// Pure data model for the split-pane tree.
-// Owns splitTrees, terminal pool, and all tree/tab/pane operations.
-// PaneTreeNode uses the splitManager interface exposed here.
+// Tab/pane state and commands. Sessions and geometry have independent owners.
 QtObject {
-    id: splitModel
+    id: model
 
-    // ── External refs — set by TerminalTabs ──────────────────────────────────
-    property var  tabsModel:    null   // ListModel
-    property Item terminalPool: null   // hidden Item — terminals are parented here
+    property var tabsModel: null
+    property var sessionPool: null
+    property var splitTrees: []
+    property int nextPaneId: 0
+    property int focusedPaneId: -1
+    property int currentIndex: 0
+    property int titleRevision: 0
 
-    // ── State ────────────────────────────────────────────────────────────────
-    property var  splitTrees:   []
-    property int  nextPaneId:   0
-    property int  focusedPaneId: -1
-    property int  currentIndex: 0
-    property bool isCurrentTab: true
-    property int  titleRevision: 0
+    signal lastTabClosed()
 
-    onCurrentIndexChanged: Qt.callLater(refreshTerminalRenderMode)
+    readonly property bool isSplitMode: Tree.countTerminals(splitTrees[currentIndex]) > 1
+    readonly property bool needsUnifiedCRT: isSplitMode || (tabsModel && tabsModel.count > 1)
 
-    // ── Derived ──────────────────────────────────────────────────────────────
-    readonly property bool isSplitMode: {
+    onCurrentIndexChanged: focusCurrentTab()
+
+    property Connections sessionConnections: Connections {
+        target: model.sessionPool
+        function onSessionFinished(paneId) { model.closePane(paneId) }
+        function onTitleChanged(paneId, title) { model.updateTitle(paneId, title) }
+        function onPaneClicked(paneId) { model.focusPane(paneId) }
+    }
+
+    function getTerminal(paneId) {
+        return sessionPool ? sessionPool.getTerminal(paneId) : null
+    }
+
+    function tabForPane(paneId) {
+        for (var i = 0; i < splitTrees.length; ++i)
+            if (Tree.collectTerminals(splitTrees[i]).indexOf(paneId) >= 0) return i
+        return -1
+    }
+
+    function focusCurrentTab() {
         var tree = splitTrees[currentIndex]
-        return tree ? countTerminals(tree) > 1 : false
-    }
-    readonly property bool needsUnifiedCRT:
-        isSplitMode || (tabsModel ? tabsModel.count > 1 : false)
-
-    // ── Terminal pool ─────────────────────────────────────────────────────────
-
-    property var _terminals: ({})
-    property var _terminalComponent: null
-
-    function createTerminal(paneId) {
-        if (!_terminalComponent)
-            _terminalComponent = Qt.createComponent("TerminalContainer.qml")
-        if (_terminalComponent.status !== Component.Ready) {
-            console.error("SplitTreeModel: failed to create component:", _terminalComponent.errorString())
-            return null
-        }
-        var obj = _terminalComponent.createObject(terminalPool, {
-            paneId: paneId
-        })
-        _terminals[paneId] = obj
-        Qt.callLater(refreshTerminalRenderMode)
-        return obj
+        if (Tree.collectTerminals(tree).indexOf(focusedPaneId) < 0)
+            focusedPaneId = Tree.findFirstTerminal(tree)
     }
 
-    function getTerminal(paneId) { return _terminals[paneId] || null }
-
-    function destroyTerminal(paneId) {
-        var t = _terminals[paneId]
-        if (t) { t.destroy(); delete _terminals[paneId] }
-        Qt.callLater(refreshTerminalRenderMode)
+    function focusPane(paneId) {
+        var index = tabForPane(paneId)
+        if (index < 0) return
+        currentIndex = index
+        focusedPaneId = paneId
     }
 
-    function refreshTerminalRenderMode() {
-        // splitActive / isSplitLayout are driven by Qt.bindings in PaneTreeNode._setupBindings —
-        // no imperative sync needed here.
-    }
-
-    // ── Title helpers ─────────────────────────────────────────────────────────
-
-    function normalizeTitle(rawTitle) {
-        if (rawTitle === undefined || rawTitle === null) return ""
-        return String(rawTitle).trim()
+    function updateTitle(paneId, title) {
+        var index = tabForPane(paneId)
+        if (index < 0) return
+        tabsModel.setProperty(index, "title", title ? String(title).trim() : "")
+        titleRevision++
     }
 
     function collectTitles() {
-        titleRevision // binding dependency — incremented on title changes
+        titleRevision
         var titles = []
-        if (!tabsModel)
-            return titles
-        for (var i = 0; i < tabsModel.count; i++) {
-            var tab = tabsModel.get(i)
-            titles.push(tab && tab.title ? tab.title : "cool-retro-term")
-        }
+        if (!tabsModel) return titles
+        for (var i = 0; i < tabsModel.count; ++i)
+            titles.push(tabsModel.get(i).title || "cool-retro-term")
         return titles
     }
 
-    // ── Tab operations ────────────────────────────────────────────────────────
-
     function addTab() {
-        var paneId = nextPaneId++
-        createTerminal(paneId)
-        tabsModel.append({ title: "" })
-        var newTrees = splitTrees.slice()
-        newTrees.push({ type: "terminal", paneId: paneId })
-        splitTrees = newTrees
+        if (!tabsModel || !sessionPool) return
+        var paneId = nextPaneId
+        var terminal = sessionPool.createTerminal(paneId)
+        if (!terminal) return
+        nextPaneId++
+        tabsModel.append({ title: terminal.title || "" })
+        splitTrees = splitTrees.concat([{ type: "terminal", paneId: paneId }])
         currentIndex = tabsModel.count - 1
         focusedPaneId = paneId
-        Qt.callLater(refreshTerminalRenderMode)
     }
 
     function closeTab(index) {
-        var tree = splitTrees[index]
-        if (tree) {
-            var paneIds = collectTerminals(tree)
-            for (var i = 0; i < paneIds.length; i++)
-                destroyTerminal(paneIds[i])
-        }
-        if (tabsModel.count <= 1) {
-            terminalWindow.close()
-            return
-        }
-        var newTrees = splitTrees.slice()
-        newTrees.splice(index, 1)
-        splitTrees = newTrees
+        if (!tabsModel || index < 0 || index >= splitTrees.length) return
+        var paneIds = Tree.collectTerminals(splitTrees[index])
+        var nextIndex = currentIndex - (index < currentIndex ? 1 : 0)
+        var trees = splitTrees.slice()
+        trees.splice(index, 1)
+        splitTrees = trees
         tabsModel.remove(index)
-        currentIndex = Math.min(currentIndex, tabsModel.count - 1)
-        if (splitTrees[currentIndex])
-            focusedPaneId = findFirstTerminal(splitTrees[currentIndex])
-        Qt.callLater(refreshTerminalRenderMode)
+        currentIndex = Math.max(0, Math.min(nextIndex, trees.length - 1))
+        focusCurrentTab()
+        for (var i = 0; i < paneIds.length; ++i)
+            sessionPool.destroyTerminal(paneIds[i])
+        if (trees.length === 0) lastTabClosed()
     }
-
-    // ── Pane operations ───────────────────────────────────────────────────────
 
     function splitPane(orientation) {
         var tree = splitTrees[currentIndex]
-        if (!tree) return
-        if (countTerminals(tree) >= 16) return
-        var newPaneId = nextPaneId++
-        createTerminal(newPaneId)
-        var newTrees = splitTrees.slice()
-        newTrees[currentIndex] = replaceNode(tree, focusedPaneId, {
+        var panes = Tree.collectTerminals(tree)
+        if (!sessionPool || panes.indexOf(focusedPaneId) < 0 || panes.length >= 16) return
+        if (orientation !== Qt.Horizontal && orientation !== Qt.Vertical) return
+        var paneId = nextPaneId
+        if (!sessionPool.createTerminal(paneId)) return
+        nextPaneId++
+        var trees = splitTrees.slice()
+        trees[currentIndex] = Tree.replaceNode(tree, focusedPaneId, {
             type: "split", orientation: orientation, ratio: 0.5,
-            first:  { type: "terminal", paneId: focusedPaneId },
-            second: { type: "terminal", paneId: newPaneId }
+            first: { type: "terminal", paneId: focusedPaneId },
+            second: { type: "terminal", paneId: paneId }
         })
-        splitTrees = newTrees
-        focusedPaneId = newPaneId
+        splitTrees = trees
+        focusedPaneId = paneId
     }
 
     function closePane(paneId) {
-        var tree = splitTrees[currentIndex]
-        if (!tree) return
-        if (countTerminals(tree) <= 1) { closeTab(currentIndex); return }
-        destroyTerminal(paneId)
-        var newTrees = splitTrees.slice()
-        newTrees[currentIndex] = removeNode(tree, paneId)
-        splitTrees = newTrees
-        focusedPaneId = findFirstTerminal(splitTrees[currentIndex])
-        Qt.callLater(refreshTerminalRenderMode)
+        var index = tabForPane(paneId)
+        if (index < 0) return
+        var tree = splitTrees[index]
+        if (Tree.countTerminals(tree) === 1) { closeTab(index); return }
+        var trees = splitTrees.slice()
+        trees[index] = Tree.removeNode(tree, paneId)
+        splitTrees = trees
+        focusCurrentTab()
+        sessionPool.destroyTerminal(paneId)
     }
 
     function moveFocus(direction) {
         var tree = splitTrees[currentIndex]
         if (!tree) return
-        var bounds = computePaneBounds(tree, 0, 0, 1, 1)
+        var bounds = Tree.computePaneBounds(tree, 0, 0, 1, 1)
         if (bounds.length <= 1) return
         var cur = null
         for (var i = 0; i < bounds.length; i++) {
@@ -191,7 +169,7 @@ QtObject {
             if (valid && dist < bestDist) { bestDist = dist; best = b }
         }
         if (!best) {
-            var allPanes = collectTerminals(tree)
+            var allPanes = Tree.collectTerminals(tree)
             var curIdx = allPanes.indexOf(focusedPaneId)
             if (curIdx < 0) return
             var wrapIdx = (direction === "right" || direction === "down")
@@ -203,199 +181,14 @@ QtObject {
         focusedPaneId = best.paneId
     }
 
+
     function updateSplitRatio(boundary, newRatio) {
         var tree = splitTrees[currentIndex]
-        if (!tree) return
-        var newTrees = splitTrees.slice()
-        newTrees[currentIndex] = _updateRatioInTree(tree, boundary, newRatio, 0, 0, 1, 1)
-        splitTrees = newTrees
+        if (!tree || !boundary || !isFinite(newRatio)) return
+        var trees = splitTrees.slice()
+        trees[currentIndex] = Tree.updateRatio(tree, boundary,
+                                               Math.max(0.1, Math.min(0.9, newRatio)),
+                                               0, 0, 1, 1)
+        splitTrees = trees
     }
-
-    // ── Tree helpers (pure functions) ─────────────────────────────────────────
-
-    function _updateRatioInTree(node, boundary, newRatio, x, y, w, h) {
-        if (!node || node.type === "terminal") return node
-        // Identify the target split node by its bounding rect + orientation.
-        // paneId alone is ambiguous when nested splits share the same first leaf.
-        var eps = 1e-6
-        var matches = node.orientation === boundary.orientation
-                   && Math.abs(x - boundary.nodeX) < eps
-                   && Math.abs(y - boundary.nodeY) < eps
-                   && Math.abs(w - boundary.nodeW) < eps
-                   && Math.abs(h - boundary.nodeH) < eps
-        if (matches)
-            return { type: "split", orientation: node.orientation,
-                     ratio: newRatio, first: node.first, second: node.second }
-        var r = node.ratio
-        if (node.orientation === Qt.Horizontal)
-            return { type: "split", orientation: node.orientation, ratio: r,
-                     first:  _updateRatioInTree(node.first,  boundary, newRatio, x,       y, w * r,     h),
-                     second: _updateRatioInTree(node.second, boundary, newRatio, x + w*r, y, w * (1-r), h) }
-        return { type: "split", orientation: node.orientation, ratio: r,
-                 first:  _updateRatioInTree(node.first,  boundary, newRatio, x, y,       w, h * r),
-                 second: _updateRatioInTree(node.second, boundary, newRatio, x, y + h*r, w, h * (1-r)) }
-    }
-
-    function computeSplitBoundaries(node, x, y, w, h) {
-        if (!node || node.type === "terminal") return []
-        var r = node.ratio
-        var result = []
-        if (node.orientation === Qt.Horizontal) {
-            result.push({ orientation: Qt.Horizontal,
-                          pos: x + w * r, start: y, end: y + h,
-                          firstLeafPaneId: findFirstTerminal(node.first),
-                          nodeX: x, nodeY: y, nodeW: w, nodeH: h })
-            result = result
-                .concat(computeSplitBoundaries(node.first,  x,       y, w * r,     h))
-                .concat(computeSplitBoundaries(node.second, x + w*r, y, w * (1-r), h))
-        } else {
-            result.push({ orientation: Qt.Vertical,
-                          pos: y + h * r, start: x, end: x + w,
-                          firstLeafPaneId: findFirstTerminal(node.first),
-                          nodeX: x, nodeY: y, nodeW: w, nodeH: h })
-            result = result
-                .concat(computeSplitBoundaries(node.first,  x, y,       w, h * r))
-                .concat(computeSplitBoundaries(node.second, x, y + h*r, w, h * (1-r)))
-        }
-        return result
-    }
-
-    function computePaneBounds(node, x, y, w, h) {
-        if (!node) return []
-        if (node.type === "terminal")
-            return [{ paneId: node.paneId, cx: x + w/2, cy: y + h/2, w: w, h: h }]
-        var r = node.ratio
-        if (node.orientation === Qt.Horizontal)
-            return computePaneBounds(node.first,  x,       y, w * r,     h)
-                  .concat(computePaneBounds(node.second, x + w*r, y, w * (1-r), h))
-        return computePaneBounds(node.first,  x, y,       w, h * r)
-              .concat(computePaneBounds(node.second, x, y + h*r, w, h * (1-r)))
-    }
-
-    function computePaneRects(node, x, y, w, h) {
-        if (node.type === "terminal") {
-            console.log("[RECT]",
-                "paneId=", node.paneId,
-                "x=", x, "y=", y, "w=", w, "h=", h)
-            return [{
-                type: "terminal",
-                paneId: node.paneId,
-                x: x,
-                y: y,
-                w: w,
-                h: h,
-                _showDividerRight: node._showDividerRight || false,
-                _showDividerBottom: node._showDividerBottom || false
-            }]
-        }
-        if (!node) return []
-        if (node.type === "terminal") {
-            return [{
-                paneId: node.paneId,
-                x: x, y: y, w: w, h: h,
-                showDividerRight: node._showDividerRight || false,
-                showDividerBottom: node._showDividerBottom || false
-            }]
-        }
-
-        var r = node.ratio
-        var first = cloneNode(node.first)
-        var second = cloneNode(node.second)
-        if (node.orientation === Qt.Horizontal)
-            first._showDividerRight = true
-        else
-            first._showDividerBottom = true
-
-        if (node.orientation === Qt.Horizontal)
-            return computePaneRects(first,  x,       y, w * r,     h)
-                  .concat(computePaneRects(second, x + w*r, y, w * (1-r), h))
-        return computePaneRects(first,  x, y,       w, h * r)
-              .concat(computePaneRects(second, x, y + h*r, w, h * (1-r)))
-    }
-
-    function countTerminals(node) {
-        if (!node) return 0
-        if (node.type === "terminal") return 1
-        return countTerminals(node.first) + countTerminals(node.second)
-    }
-
-    function collectTerminals(node) {
-        if (!node) return []
-        if (node.type === "terminal") return [node.paneId]
-        return collectTerminals(node.first).concat(collectTerminals(node.second))
-    }
-
-    function findFirstTerminal(node) {
-        if (!node) return -1
-        if (node.type === "terminal") return node.paneId
-        return findFirstTerminal(node.first)
-    }
-
-    function cloneNode(node) {
-        if (!node) return node
-        if (node.type === "terminal")
-            return {
-                type: "terminal",
-                paneId: node.paneId,
-                _showDividerRight: node._showDividerRight || false,
-                _showDividerBottom: node._showDividerBottom || false
-            }
-        return {
-            type: "split",
-            orientation: node.orientation,
-            ratio: node.ratio,
-            first: cloneNode(node.first),
-            second: cloneNode(node.second),
-            _showDividerRight: node._showDividerRight || false,
-            _showDividerBottom: node._showDividerBottom || false
-        }
-    }
-
-    function replaceNode(node, paneId, newNode) {
-        if (!node) return node
-        if (node.type === "terminal") return node.paneId === paneId ? newNode : node
-        return { type: "split", orientation: node.orientation, ratio: node.ratio,
-                 first:  replaceNode(node.first,  paneId, newNode),
-                 second: replaceNode(node.second, paneId, newNode) }
-    }
-
-    function removeNode(node, paneId) {
-        if (!node) return node
-        if (node.type === "terminal") return node
-        if (node.first  && node.first.type  === "terminal" && node.first.paneId  === paneId) return node.second
-        if (node.second && node.second.type === "terminal" && node.second.paneId === paneId) return node.first
-        return { type: "split", orientation: node.orientation, ratio: node.ratio,
-                 first:  removeNode(node.first,  paneId),
-                 second: removeNode(node.second, paneId) }
-    }
-
-    function dumpSplitDebug() {
-        var tree = splitTrees[currentIndex]
-        console.log("=== SplitTree Debug ===")
-        console.log("currentIndex:", currentIndex,
-            "focusedPaneId:", focusedPaneId,
-            "isSplitMode:", isSplitMode,
-            "needsUnifiedCRT:", needsUnifiedCRT)
-
-        console.log("terminals:", JSON.stringify(collectTerminals(tree)))
-        console.log("paneRects:", JSON.stringify(computePaneRects(tree, 0, 0, 1, 1)))
-        console.log("boundaries:", JSON.stringify(computeSplitBoundaries(tree, 0, 0, 1, 1)))
-
-        for (var paneId in _terminals) {
-            var t = _terminals[paneId]
-            console.log("terminal", paneId,
-                "obj=", t,
-                "parent=", t ? t.parent : null,
-                "visible=", t ? t.visible : null,
-                "x=", t ? t.x : null,
-                "y=", t ? t.y : null,
-                "w=", t ? t.width : null,
-                "h=", t ? t.height : null,
-                "splitActive=", t ? t.splitActive : null,
-                "ktermSize=", (t && t.mainTerminal)
-                    ? t.mainTerminal.width + "x" + t.mainTerminal.height : null)
-        }
-    }
-
-
 }

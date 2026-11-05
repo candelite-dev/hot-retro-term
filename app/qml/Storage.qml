@@ -18,72 +18,53 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *******************************************************************************/
 
-import QtQuick 2.2
-import QtQuick.LocalStorage 2.0
+import QtQuick
+import QtQuick.LocalStorage
 
+// SQLite access only. Settings/profile interpretation belongs to the codec and persistence layer.
 QtObject {
     readonly property string dbMajorVersion: "2"
     readonly property string dbMinorVersion: "1.0"
     property bool initialized: false
 
     function getDatabase() {
-         return LocalStorage.openDatabaseSync("coolretroterm" + dbMajorVersion, dbMinorVersion, "StorageDatabase", 100000)
+        return LocalStorage.openDatabaseSync("coolretroterm" + dbMajorVersion, dbMinorVersion, "StorageDatabase", 100000)
     }
 
     function initialize() {
-        var db = getDatabase();
-        db.transaction(
-            function(tx) {
-                tx.executeSql('CREATE TABLE IF NOT EXISTS settings(setting TEXT UNIQUE, value TEXT)');
-            }
-        )
-
+        getDatabase().transaction(function(tx) {
+            tx.executeSql("CREATE TABLE IF NOT EXISTS settings(setting TEXT UNIQUE, value TEXT)")
+        })
         initialized = true
     }
 
-    function setSetting(setting, value) {
-        if(!initialized) initialize();
-
-        var db = getDatabase();
-        var res = "";
-        db.transaction(
-            function(tx) {
-                var rs = tx.executeSql('INSERT OR REPLACE INTO settings VALUES (?,?);', [setting,value]);
-                //console.log(rs.rowsAffected)
-                if (rs.rowsAffected > 0) {
-                    res = "OK";
-                } else {
-                    res = "Error";
-                }
-           }
-      )
-      // The function returns “OK” if it was successful, or “Error” if it wasn't
-      return res
+    function getSetting(key) {
+        if (!initialized) initialize()
+        var value
+        getDatabase().readTransaction(function(tx) {
+            var rows = tx.executeSql("SELECT value FROM settings WHERE setting=?", [key]).rows
+            if (rows.length > 0) value = rows.item(0).value
+        })
+        return value
     }
 
-    function getSetting(setting) {
-        if(!initialized) initialize();
-        var db = getDatabase();
-        var res = "";
-        db.transaction(
-            function(tx) {
-                var rs = tx.executeSql('SELECT value FROM settings WHERE setting=?;', [setting]);
-                if (rs.rows.length > 0) {
-                res = rs.rows.item(0).value;
-                } else {
-                res = undefined;
-                }
-            }
-        )
-        return res
+    function setSettings(entries) {
+        if (!initialized) initialize()
+        getDatabase().transaction(function(tx) {
+            for (var key in entries)
+                tx.executeSql("INSERT OR REPLACE INTO settings VALUES (?,?)", [key, entries[key]])
+        })
+        return true
     }
 
-    function dropSettings(){
-        var db = getDatabase();
-        db.transaction(
-            function(tx) {
-                tx.executeSql('DROP TABLE settings');
-            }
-        )
+    function setSetting(key, value) {
+        var entries = {}
+        entries[key] = value
+        return setSettings(entries) ? "OK" : "Error"
+    }
+
+    function dropSettings() {
+        getDatabase().transaction(function(tx) { tx.executeSql("DROP TABLE IF EXISTS settings") })
+        initialized = false
     }
 }

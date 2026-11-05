@@ -34,8 +34,8 @@ ApplicationWindow {
 
     visible: false
 
-    property bool fullscreen: false
-    onFullscreenChanged: visibility = (fullscreen ? Window.FullScreen : Window.Windowed)
+    property bool fullscreen: launchOptions.fullscreen
+    onFullscreenChanged: if (visible) visibility = (fullscreen ? Window.FullScreen : Window.Windowed)
 
     // Keeps appRoot.anyWindowVisible current so the render loop can stop
     // while every window is minimized or hidden. Also re-applies the native
@@ -149,7 +149,6 @@ ApplicationWindow {
             if (s) s.sequence = template.replace("{n}", String(i + 1))
         }
 
-        visible = true
     }
 
     Action {
@@ -250,6 +249,7 @@ ApplicationWindow {
 
     TerminalTabs {
         id: terminalTabs
+        objectName: "terminalTabs"
         width: parent.width
         height: (parent.height + Math.abs(y))
     }

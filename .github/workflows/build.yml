@@ -22,7 +22,7 @@ jobs:
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v3
         with:
-          version: '6.7.*'
+          version: '6.10.*'
           modules: 'qt5compat qtshadertools'
           cache: true
 
@@ -47,6 +47,9 @@ jobs:
       - name: Build
         run: cmake --build build --parallel $(nproc)
 
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
   build-macos:
     name: macOS
     runs-on: macos-latest
@@ -59,7 +62,7 @@ jobs:
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v3
         with:
-          version: '6.7.*'
+          version: '6.10.*'
           modules: 'qt5compat qtshadertools'
           cache: true
 
@@ -71,3 +74,6 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
