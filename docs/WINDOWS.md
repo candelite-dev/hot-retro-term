@@ -63,7 +63,12 @@ behavior is preserved. Do not push a release tag to validate this PR.
 - **D3 reproduced:** `threePaneResizeStress` using native D3D11 selected the RTX
   3070 Ti and crashed with `0xC0000005`, nearby symbol `NVENCODEAPI_Thunk`, in
   NVIDIA code. This remains unresolved; no speculative driver workaround is added.
-- WSL/input follow-up and CI results are recorded in the task ledger.
+- The opt-in WSL readline check failed the Ctrl+U/paste round trip (empty read
+  result). The native Ctrl+Shift+V shortcut check also failed to deliver its test
+  sentinel; the copy check was not reached. D2 remains unresolved.
+- CI has not run for this integration: local Git credentials were rejected and
+  the connected GitHub app cannot write repository objects. The user will push;
+  PR #5 remains draft and no release was published.
 
 For the hardware resize reproduction, start in the same build environment:
 
@@ -89,7 +94,10 @@ $env:HRT_TEST_WSL_DISTRO = 'Ubuntu-24.04'
 ./build/windows-msvc/tests/hrt_terminal_input_test.exe wslReadlineInput -o wsl-input.txt,txt
 ```
 
-D2's physical-key shortcut and WSL paste reports remain open until reproduced and
-a fix is verified. Cursor blink timing and physical clipboard shortcuts require
-separate native interaction checks; static frames alone do not establish them.
+D2's physical-key shortcut and WSL paste reports remain open; the diagnostic
+failures above do not establish a fix. To run the native shortcut diagnostic, set
+`HRT_TEST_NATIVE_INPUT=1` and run `hrt_startup_test.exe nativeClipboardShortcuts`
+with the Windows platform and software Quick backend. Both clipboard diagnostics
+restore the previous clipboard contents. Cursor blink timing and the copy shortcut
+still require separate native interaction checks; static frames do not establish them.
 MinGW, Windows ARM64, engine redesign, and driver workarounds are outside this PR.

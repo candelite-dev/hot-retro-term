@@ -135,3 +135,17 @@ status の値: `todo` / `in-progress`（Codex実装中） / `review`（実装済
 - 2026-07-21 / D2 / 【次セッション引き継ぎ・メイン Opus】Codex 調査完了、恒久修正は保留（実機ログ待ち）。**仮説ランキング（Codex）**: ①bracketed paste マーカー混入=「端末 mode と貼付時に読む readline 文脈の不一致 or mode 取り残し」が最有力（?2004h/l は Vt102→Emulation cache→TerminalDisplay へ正しく同期する構造で Windows 固有分岐なし・_disabledBracketedPasteMode は false 固定で有効化呼出なし）。②Ctrl+Shift+C/V 不動作=「QML Action の shortcut dispatch or 物理 Command/Win キーと Ctrl 取り違え」最有力（D1 で端末内容コピーは出来たので QClipboard 全体故障は低め）。③Ctrl+U 不動作=「実 modifier が Ctrl でなく Meta/Windows」最有力（ユーザー表現「Command+U」と整合、mac 用 remap は Windows で無効。keytab に U/C/V 明示 entry なし・汎用変換で 0x55&0x1f=0x15、2つの default.keytab はバイト一致）。**診断（未コミット・working tree に温存）**: Windows 限定 D2InputTrace ＝ 変更5ファイル（qmltermwidget/lib/D2InputTrace.h〈新規〉+ TerminalWindow.qml + TerminalDisplay.cpp + Vt102Emulation.cpp + PtyWin.cpp）。C:\crt-setup\d2-input-trace.txt に長さ/フラグ/制御バイトのみ記録（本文非保存）: ?2004h/l→display mode 遷移、ペースト直前の mode/disabled/willWrap、QClipboard 読出長・copy 選択長/書込後 clipboard 長、実ロード copy/paste shortcut と Action 発火、C/V/U の Qt key/modifier/native/変換後 outputHex、ConPTY 投入直前の marker 有無・単独 0x15 有無。**次セッション実機1往復手順**: ①box を D2 診断で同期（git reset --hard origin/windows-port 後に上記5ファイルを scp）→ C:\crt\src\app\qml\resources.qrc を touch → C:\crt-setup\build.cmd（アプリ kill 後）②旧 d2-input-trace.txt 削除して起動③WSL bash で `bind -v | grep enable-bracketed-paste` 確認④既知文字列を Edit→Paste と Ctrl+Shift+V の両方で貼付、選択を Edit→Copy と Ctrl+Shift+C でコピー、Ctrl+U 押下⑤d2-input-trace.txt を scp 回収して解析→機序確定→恒久修正を Codex へ（codex-companion --resume-last か codex resume で D2 セッション継続）。診断は恒久修正確定後に revert。status は in-progress のまま
 - 2026-07-25 / D3 / 起票（メイン Sonnet + ユーザー実機観測）: Windows 実機で左右2分割→右をさらに上下2分割（L字3ペイン）状態のまま、外部タイリングWM **komorebi** がウィンドウを自動連続リサイズした際にアプリのプロセスごとクラッシュ。イベントビューアーに例外コード **0xC0000005**（アクセス違反）、フォールティングモジュール **nvwgf2umx.dll**（NVIDIA D3D11 UMD、実機はRTX 3070 Ti）を確認。再現頻度・タイミングは未特定。初期調査: D1と同じ「D3D11 RHI/ShaderEffectSource経路の脆さ」が濃厚な仮説（ドライバ内部でのAV＝Qt/アプリコードでなくRHIのテクスチャ(再)生成・破棄まわりの異常呼び出しパターンを疑う）。リサイズ経路にデバウンス/スロットルが皆無なこと（PreprocessedTerminal.qml:108-114 が毎回即updateSources、SplitTreeModel.qml:277-279に無条件console.logが残存）、PaneLayout.qml:161-189のunifiedPaneSource/unifiedCRTが毎リサイズtickで単一の重い経路として全体再生成されること、PaneLayout.qml:112-115のpaneSlotに最小サイズガードが無いことを手がかりとして記録。**注意**: 現在working treeにD2の未コミット診断計装5ファイルが残存中（D3とは無関係、触らない）。タスクファイル windows-plan/tasks/D3-split-resize-crash.md 作成、Codex 調査へ委任
 - 2026-07-25 / D3 / 全仮説を静的再調査し、Windows限定の統合CRTキャプチャ迂回実験・1px/有効寸法ガード・`[RECT]`ログ抑止とWER/cdb取得手順を未commit差分で用意 / 検証結果: `qmllint` exit 0・`git diff --check`成功、Windows実機待ち
+
+Final integration validation — 2026-11-06: all eight software CTest suites pass,
+including the three-pane resize stress regression. Optional hardware/input checks
+remain deliberately outside CI defaults: native D3D11 resize crashes; WSL readline
+Ctrl+U/paste returns an empty result; native Ctrl+Shift+V does not deliver the test
+sentinel (copy check not reached). D2 and D3 stay open. Clipboard diagnostic tests
+restore the previous contents. Cursor blink timing was not established by static
+screenshots. Local deployment, packaging, and extracted-ZIP startup passed.
+
+Delivery: integration saved as a normal merge commit with parents `9afe111` and
+`77eca9c`. Git push authentication failed; connected GitHub write access was also
+unavailable. The user will push. CI is therefore pending, PR #5 remains draft, and
+no release was published. A ready-to-paste PR description is saved locally in
+`build/PR5-body.md` (not tracked).
