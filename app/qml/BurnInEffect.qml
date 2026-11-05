@@ -25,7 +25,6 @@ Loader {
     id: burnInEffect
 
     property ShaderEffectSource effectSource: item ? item.source : null
-    property bool resizing: false
 
     property real lastUpdate: 0
     property real prevLastUpdate: 0
@@ -72,7 +71,10 @@ Loader {
 
             sourceItem: burnInShaderEffect
             live: false
-            recursive: !resizing
+            // This shader samples its own previous output, including during
+            // resize and font zoom. Keep a separate feedback texture so it
+            // never samples the render target currently being written.
+            recursive: true
             hideSource: true
             wrapMode: ShaderEffectSource.ClampToEdge
 
@@ -131,21 +133,5 @@ Loader {
 
             onStatusChanged: if (log) console.log(log) //Print warning messages
         }
-    }
-
-    onWidthChanged: {
-        resizing = true
-        resizeTimer.restart()
-    }
-
-    onHeightChanged: {
-        resizing = true
-        resizeTimer.restart()
-    }
-
-    Timer {
-        id: resizeTimer
-        interval: 300
-        onTriggered: resizing = false
     }
 }

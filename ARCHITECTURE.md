@@ -69,6 +69,9 @@ For one terminal, `PreprocessedTerminal` captures terminal text, `BurnInEffect`
 keeps a fading trail, and `ShaderTerminal` applies the static and animated effects.
 For multiple panes or tabs, `PaneLayout` captures the shared content and applies
 one CRT effect pipeline. `splitActive` disables the individual pipelines.
+`BurnInEffect` always keeps its feedback source double buffered, including during
+resize and font zoom, so it never samples the render target being written. This
+avoids undefined feedback while the terminal textures change size.
 
 Both paths express `virtualResolution` in terminal font pixels, using the font's
 `screenScaling`. The shared path includes the tab bar in that grid. `ShaderTerminal`

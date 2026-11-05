@@ -188,6 +188,56 @@ private slots:
         QTRY_VERIFY(app.evaluate("tabs.focusedTerminal.mainTerminal.width > 0 && tabs.terminalSize.width > 0").toBool());
     }
 
+    void burnInFeedbackStaysBufferedDuringResizeAndZoom_data() {
+        QTest::addColumn<QString>("layout");
+        QTest::newRow("single-terminal") << QString("single");
+        QTest::newRow("shared-tabs") << QString("tabs");
+        QTest::newRow("shared-splits") << QString("split");
+    }
+    void burnInFeedbackStaysBufferedDuringResizeAndZoom() {
+        QFETCH(QString, layout);
+        AppFixture app;
+        app.load();
+        QVERIFY(!app.engine.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(app.window());
+        QVERIFY(window);
+        auto *tabs = window->findChild<QObject *>("terminalTabs");
+        QVERIFY(tabs);
+        app.engine.globalObject().setProperty("tabs", app.engine.newQObject(tabs));
+        QTRY_VERIFY(app.evaluate("tabs.focusedTerminal !== null").toBool());
+        app.evaluate("root.appSettings.burnIn = 0.5");
+        if (layout == "tabs") app.evaluate("tabs.addTab()");
+        if (layout == "split") app.evaluate("tabs.splitPane(Qt.Horizontal)");
+        auto *crt = layout == "single"
+            ? app.evaluate("tabs.focusedTerminal").toQObject()
+            : window->findChild<QObject *>("unifiedCRT");
+        QVERIFY(crt);
+        auto *burnIn = crt->property("burnInEffect").value<QObject *>();
+        QVERIFY(burnIn);
+        QTRY_VERIFY(burnIn->property("effectSource").value<QObject *>());
+        auto *buffer = burnIn->property("effectSource").value<QObject *>();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTRY_VERIFY(buffer->property("recursive").toBool());
+
+        // A shader that samples its own output needs a separate previous-frame
+        // texture on every frame, including while the render target changes size.
+        const auto width = buffer->property("width").toReal();
+        const auto height = buffer->property("height").toReal();
+        window->resize(window->width() + 120, window->height() + 80);
+        QTRY_VERIFY(buffer->property("width").toReal() != width);
+        QTRY_VERIFY(buffer->property("height").toReal() != height);
+        QVERIFY2(buffer->property("recursive").toBool(),
+                 "Resize made the burn-in shader read from its active render target");
+        for (const qreal zoom : {0.65, 1.5, 1.0}) {
+            app.evaluate(QString("root.appSettings.fontScaling = %1").arg(zoom));
+            QCoreApplication::processEvents();
+            QVERIFY2(buffer->property("recursive").toBool(),
+                     "Font zoom disabled previous-frame buffering");
+            QVERIFY(!window->grabWindow().isNull());
+        }
+        QVERIFY(burnIn->property("active").toBool());
+    }
+
     void smallRetinaFontKeepsSelectedRasterization() {
         AppFixture app;
         app.load();
