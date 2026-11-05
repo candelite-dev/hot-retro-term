@@ -1,0 +1,56 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Local development (Release + tests)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows x64 MSVC 2022 (Release + tests)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-msvc",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "cl",
+        "BUILD_TESTING": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

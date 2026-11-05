@@ -32,9 +32,10 @@ key Return-Shift+NewLine : "\r\n"
 
 key Return+Shift         : "\EOM"
 
-# Backspace and Delete codes are preserving CTRL-H.
-
-key Backspace      : "\x7f"
+# Backspace sends DEL for compatibility with modern terminal applications.
+# Control+Backspace sends BS, the same byte as Control+H.
+key Backspace -Control : "\x7f"
+key Backspace +Control : "\b"
 
 # Arrow keys in VT52 mode
 # shift up/down are reserved for scrolling.

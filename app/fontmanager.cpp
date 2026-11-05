@@ -29,7 +29,7 @@ FontManager::FontManager(QObject *parent)
 
     // Enumerate system fonts off the startup path — QFontDatabase::families() can be slow
     // (100ms+ on macOS). Bundled fonts are already available; system fonts appear shortly after.
-    QThreadPool::globalInstance()->start([this]() {
+    m_fontDiscoveryPool.start([this]() {
         QStringList families = retrieveMonospaceFonts();
         QMetaObject::invokeMethod(this, [this, families]() {
             for (const QString &family : families) {
@@ -53,6 +53,13 @@ FontManager::FontManager(QObject *parent)
     });
 }
 
+FontManager::~FontManager()
+{
+    // The worker queues results to this QObject. Join before any members are
+    // destroyed; QObject then removes queued deliveries during its teardown.
+    m_fontDiscoveryPool.waitForDone();
+}
+
 QStringList FontManager::retrieveMonospaceFonts()
 {
     QStringList result;
@@ -67,6 +74,21 @@ void FontManager::refresh()
 {
     updateFilteredFonts();
     updateComputedFont();
+}
+
+QFont FontManager::cellAlignedFont(const QFont &font, int cellWidth) const
+{
+    QFont aligned = font;
+    if (cellWidth <= 0)
+        return aligned;
+
+    // TerminalDisplay positions characters on an integer grid. Native text
+    // layout can retain fractional advances even with full hinting (macOS).
+    // Keep the terminal's font settings and only align its monospaced advance.
+    aligned.setLetterSpacing(QFont::AbsoluteSpacing, 0);
+    const qreal advance = QFontMetricsF(aligned).horizontalAdvance(QLatin1Char('M'));
+    aligned.setLetterSpacing(QFont::AbsoluteSpacing, cellWidth - advance);
+    return aligned;
 }
 
 FontListModel *FontManager::fontList()

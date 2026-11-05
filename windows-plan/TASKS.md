@@ -1,4 +1,34 @@
 # Windows移植 タスクボード
+## Integration update — 2026-11-06
+
+Current master (`77eca9c`) is merged into `windows-port` in an isolated worktree,
+with the original checkout and its two modified shader binaries preserved. The
+merge uses master's vendored terminal engine and application cleanup as baseline;
+Windows ConPTY/compatibility changes, CRT sampler bindings, full cursor repaint,
+and boot overlay fixes are retained. The obsolete recursive renderer stays deleted.
+
+Restored MSVC 2022 x64/Ninja presets, native Windows startup/input/lifecycle tests,
+target-dependent deployment, allowlisted staging, clean ZIP packaging and shared
+Windows CI. Manual release workflows now validate artifacts without publishing.
+See `docs/WINDOWS.md` for commands and the integration validation record.
+
+Local evidence: Release build on Qt 6.10.3/MSVC 19.44 succeeded; all eight CTest
+suites passed before adding the extended resize/WSL diagnostics; deployment and
+extracted ZIP startup outside the build tree with Qt SDK paths removed passed.
+Native screenshots confirmed CRT output and the L-shaped three-pane layout.
+
+**D3 remains open and is reproduced again:** native `threePaneResizeStress` with
+D3D11 selected the RTX 3070 Ti (driver 32.0.16.1074) and crashed after ~21 seconds
+with `0xC0000005`, nearby symbol `NVENCODEAPI_Thunk`, in NVIDIA code. No driver
+workaround is included. The 60-resize harness also runs with software rendering
+in CTest; passing that does not establish native GPU correctness.
+
+**D2 remains open:** the opt-in Ubuntu-24.04 WSL readline check reached its prompt,
+but Ctrl+U followed by clipboard paste/Return yielded an empty read result instead
+of the expected sentinel. This is a controlled failing diagnostic, not proof of a
+fix or a full reproduction of every physical-key report. Physical clipboard
+shortcuts and cursor blink timing still require a separate interaction check.
+CI results and final validation are appended below after delivery.
 
 **正本ルール: 各タスクの status はこのファイルの表だけで管理する。タスクファイル側には status を書かない。**
 

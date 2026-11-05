@@ -47,8 +47,9 @@ public slots:
         const char *cursor = data.constData();
         qint64 bytesLeft = data.size();
         DWORD bytesWritten = 0;
-        while (bytesLeft > 0
-               && WriteFile(m_h, cursor, DWORD(bytesLeft), &bytesWritten, nullptr)) {
+        while (bytesLeft > 0 && !QThread::currentThread()->isInterruptionRequested()
+               && WriteFile(m_h, cursor, DWORD(bytesLeft), &bytesWritten, nullptr)
+               && bytesWritten > 0) {
             cursor += bytesWritten;
             bytesLeft -= bytesWritten;
         }
@@ -61,6 +62,7 @@ private:
 Pty::Pty(QObject *parent)
     : KProcess(parent)
 {
+    setOutputChannelMode(SeparateChannels);
     setStandardInputFile(QProcess::nullDevice());
     setStandardOutputFile(QProcess::nullDevice());
     setStandardErrorFile(QProcess::nullDevice());
@@ -93,7 +95,10 @@ int Pty::start(const QString &program, const QStringList &arguments,
 
     if (!openPseudoConsole())
         return -1;
-    installCreateProcessModifier();
+    if (!installCreateProcessModifier()) {
+        closePty();
+        return -1;
+    }
 
     KProcess::start();
     if (!waitForStarted(5000)) {
@@ -120,6 +125,9 @@ int Pty::start(const QString &program, const QStringList &arguments,
     m_reader->start();
 
     m_writerThread = new QThread(this);
+    connect(m_writerThread, &QThread::started, m_writerThread, [this]() {
+        m_writerThreadId.store(GetCurrentThreadId());
+    }, Qt::DirectConnection);
     m_writer = new ConPtyWriter(m_inWrite);
     m_writer->moveToThread(m_writerThread);
     connect(m_writerThread, &QThread::finished, m_writer, &QObject::deleteLater);
@@ -168,10 +176,32 @@ int Pty::foregroundProcessGroup() const
 
 void Pty::closePty()
 {
+    if (state() != QProcess::NotRunning) {
+        kill();
+        waitForFinished(1000);
+    }
+    // Descendants may keep console pipes open after the initial shell exits.
+    if (m_hJob) {
+        CloseHandle(m_hJob);
+        m_hJob = nullptr;
+    }
     if (m_writerThread) {
         m_writer = nullptr;
+        m_writerThread->requestInterruption();
         m_writerThread->quit();
-        m_writerThread->wait(1000);
+        // A large paste can block WriteFile. Cancel synchronous I/O and join
+        // before freeing the worker or its pipe. Recheck the thread-start race.
+        while (!m_writerThread->wait(50)) {
+            const DWORD id = m_writerThreadId.load();
+            HANDLE thread = id ? OpenThread(THREAD_TERMINATE, FALSE, id) : nullptr;
+            if (thread) {
+                CancelSynchronousIo(thread);
+                CloseHandle(thread);
+            }
+        }
+        delete m_writerThread;
+        m_writerThread = nullptr;
+        m_writerThreadId.store(0);
     }
     if (m_inWrite != INVALID_HANDLE_VALUE) {
         CloseHandle(m_inWrite);
@@ -181,8 +211,11 @@ void Pty::closePty()
         ClosePseudoConsole(m_hPC);
         m_hPC = nullptr;
     }
-    if (m_reader)
-        m_reader->wait(2000);
+    if (m_reader) {
+        m_reader->wait();
+        delete m_reader;
+        m_reader = nullptr;
+    }
     if (m_outRead != INVALID_HANDLE_VALUE) {
         CloseHandle(m_outRead);
         m_outRead = INVALID_HANDLE_VALUE;
@@ -191,10 +224,6 @@ void Pty::closePty()
         DeleteProcThreadAttributeList(
             reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(m_attrListBuffer.data()));
         m_attrListBuffer.clear();
-    }
-    if (m_hJob) {
-        CloseHandle(m_hJob);
-        m_hJob = nullptr;
     }
 }
 
@@ -264,18 +293,26 @@ bool Pty::openPseudoConsole()
     return true;
 }
 
-void Pty::installCreateProcessModifier()
+bool Pty::installCreateProcessModifier()
 {
     SIZE_T bytes = 0;
     InitializeProcThreadAttributeList(nullptr, 1, 0, &bytes);
     m_attrListBuffer.resize(qsizetype(bytes));
     auto attrs = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(m_attrListBuffer.data());
-    InitializeProcThreadAttributeList(attrs, 1, 0, &bytes);
-    UpdateProcThreadAttribute(attrs, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
-                              m_hPC, sizeof(HPCON), nullptr, nullptr);
+    if (!InitializeProcThreadAttributeList(attrs, 1, 0, &bytes)) {
+        m_attrListBuffer.clear();
+        return false;
+    }
+    if (!UpdateProcThreadAttribute(attrs, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+                                  m_hPC, sizeof(HPCON), nullptr, nullptr))
+        return false;
 
     ZeroMemory(&m_siEx, sizeof(m_siEx));
     m_siEx.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+    // Explicit null standard handles let ConPTY provide its console handles.
+    // Otherwise a parent launched with redirected streams leaks those streams
+    // into the child, bypassing the pseudoconsole (as in CTest/CI).
+    m_siEx.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
     m_siEx.lpAttributeList = attrs;
 
     setCreateProcessArgumentsModifier([this](QProcess::CreateProcessArguments *args) {
@@ -284,6 +321,7 @@ void Pty::installCreateProcessModifier()
         args->inheritHandles = false;
         args->startupInfo = &m_siEx.StartupInfo;
     });
+    return true;
 }
 
 void Pty::addEnvironmentVariables(const QStringList &environment)

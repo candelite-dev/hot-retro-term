@@ -25,47 +25,28 @@ set(QMLTERMWIDGET_SOURCES
 )
 
 if(WIN32)
-    list(APPEND QMLTERMWIDGET_SOURCES
-        lib/PtyWin.cpp
-        lib/PtyWin.h
-    )
+    list(APPEND QMLTERMWIDGET_SOURCES lib/PtyWin.cpp lib/PtyWin.h)
 else()
-    list(APPEND QMLTERMWIDGET_SOURCES
-        lib/BlockArray.cpp
-        lib/kpty.cpp
-        lib/kptydevice.cpp
-        lib/kptyprocess.cpp
-        lib/Pty.cpp
-    )
+    list(APPEND QMLTERMWIDGET_SOURCES lib/BlockArray.cpp lib/kpty.cpp
+        lib/kptydevice.cpp lib/kptyprocess.cpp lib/Pty.cpp)
+endif()
+add_library(qmltermwidget MODULE ${QMLTERMWIDGET_SOURCES})
+target_compile_definitions(qmltermwidget PRIVATE QTERMWIDGET_LIBRARY)
+if(WIN32)
+    target_compile_definitions(qmltermwidget PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
+        _WIN32_WINNT=0x0A00 WINVER=0x0A00 NTDDI_VERSION=0x0A000006)
+else()
+    target_compile_definitions(qmltermwidget PRIVATE HAVE_POSIX_OPENPT HAVE_SYS_TIME_H)
 endif()
 
-add_library(qmltermwidget MODULE ${QMLTERMWIDGET_SOURCES})
-
-if(WIN32)
+if(APPLE)
     target_compile_definitions(qmltermwidget PRIVATE
-        QTERMWIDGET_LIBRARY
-        NOMINMAX
-        WIN32_LEAN_AND_MEAN
-        _WIN32_WINNT=0x0A00
-        WINVER=0x0A00
-        NTDDI_VERSION=0x0A000006
+        HAVE_UTMPX
+        _UTMPX_COMPAT
+        HAVE_PTSNAME
+        HAVE_UNLOCKPT
+        HAVE_GRANTPT
     )
-else()
-    target_compile_definitions(qmltermwidget PRIVATE
-        QTERMWIDGET_LIBRARY
-        HAVE_POSIX_OPENPT
-        HAVE_SYS_TIME_H
-    )
-
-    if(APPLE)
-        target_compile_definitions(qmltermwidget PRIVATE
-            HAVE_UTMPX
-            _UTMPX_COMPAT
-            HAVE_PTSNAME
-            HAVE_UNLOCKPT
-            HAVE_GRANTPT
-        )
-    endif()
 endif()
 
 target_include_directories(qmltermwidget PRIVATE lib src)
@@ -82,7 +63,12 @@ target_link_libraries(qmltermwidget PRIVATE
 # applicationDirPath()+"/../../../qmltermwidget" (macOS bundle) to the import path list.
 set_target_properties(qmltermwidget PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qmltermwidget/QMLTermWidget"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qmltermwidget/QMLTermWidget"
 )
+
+# Refresh the copied layouts on incremental builds after a keytab-only edit.
+file(GLOB_RECURSE KEYBOARD_LAYOUT_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/lib/kb-layouts/*.keytab")
+set_property(TARGET qmltermwidget APPEND PROPERTY LINK_DEPENDS ${KEYBOARD_LAYOUT_FILES})
 
 # Copy plugin assets alongside the .dylib/.so
 add_custom_command(TARGET qmltermwidget POST_BUILD

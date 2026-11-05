@@ -9,7 +9,9 @@
 #include <QtWidgets/QApplication>
 #include <QIcon>
 #include <QQuickStyle>
+#include <QQuickWindow>
 #include <QtQml/qqml.h>
+#include <QSurfaceFormat>
 
 #include <kdsingleapplication.h>
 
@@ -22,30 +24,52 @@
 #include <fontlistmodel.h>
 #include <fontmanager.h>
 #include <curvatureinputfilter.h>
+#include "launchoptions.h"
+#include <QTextStream>
 
 #if defined(Q_OS_MAC)
 #include <CoreFoundation/CoreFoundation.h>
 #include <QStyleFactory>
 #include <QMenu>
+#include <macwindow.h>
 #endif
-
-QString getNamedArgument(QStringList args, QString name, QString defaultName)
-{
-    int index = args.indexOf(name);
-    return (index != -1) ? args[index + 1] : QString(defaultName);
-}
-
-QString getNamedArgument(QStringList args, QString name)
-{
-    return getNamedArgument(args, name, "");
-}
 
 int main(int argc, char *argv[])
 {
+    QStringList arguments;
+    for (int i = 0; i < argc; ++i) arguments.append(QString::fromLocal8Bit(argv[i]));
+    const auto launch = parseLaunchOptions(arguments, QDir::currentPath());
+    if (!launch.isValid()) {
+        QTextStream(stderr) << launch.error << "\nUse --help for usage.\n";
+        return EXIT_FAILURE;
+    }
+    if (launch.options.help) {
+        QTextStream(stdout) << launch.helpText;
+        return EXIT_SUCCESS;
+    }
+    const QString appVersion(QStringLiteral(APP_VERSION));
+    if (launch.options.version) {
+        QTextStream(stdout) << "cool-retro-term " << appVersion << Qt::endl;
+        return EXIT_SUCCESS;
+    }
+
     // Some environmental variable are necessary on certain platforms.
     // Disable Connections slot warnings
     QLoggingCategory::setFilterRules("qt.qml.connections.warning=false");
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::Round);
+
+    // Reserve an alpha channel on the default surface format so the CRT
+    // shader's per-pixel alpha (ApplicationSettings.windowOpacity) reaches
+    // the window compositor instead of being discarded as opaque. Must be
+    // set before QApplication is constructed — later is a silent no-op.
+    QSurfaceFormat translucentFormat = QSurfaceFormat::defaultFormat();
+    translucentFormat.setAlphaBufferSize(8);
+    QSurfaceFormat::setDefaultFormat(translucentFormat);
+
+    // Also required: without this, Qt Quick's scene graph allocates its
+    // render targets without an alpha channel regardless of the surface
+    // format above, and the compositor never sees per-pixel transparency.
+    QQuickWindow::setDefaultAlphaBuffer(true);
 
 // #if defined (Q_OS_LINUX)
 //     setenv("QSG_RENDER_LOOP", "threaded", 0);
@@ -63,28 +87,10 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 #endif
 
-    if (argc>1 && (!strcmp(argv[1],"-h") || !strcmp(argv[1],"--help"))) {
-        QTextStream cout(stdout, QIODevice::WriteOnly);
-        cout << "Usage: " << argv[0] << " [--default-settings] [--workdir <dir>] [--program <prog>] [-p|--profile <prof>] [--fullscreen] [-h|--help]" << Qt::endl;
-        cout << "  --default-settings  Run cool-retro-term with the default settings" << Qt::endl;
-        cout << "  --workdir <dir>     Change working directory to 'dir'" << Qt::endl;
-        cout << "  -e <cmd>            Command to execute. This option will catch all following arguments, so use it as the last option." << Qt::endl;
-        cout << "  --fullscreen        Run cool-retro-term in fullscreen." << Qt::endl;
-        cout << "  -p|--profile <prof> Run cool-retro-term with the given profile." << Qt::endl;
-        cout << "  -h|--help           Print this help." << Qt::endl;
-        cout << "  --verbose           Print additional information such as profiles and settings." << Qt::endl;
-        return 0;
-    }
-
-    QString appVersion(QStringLiteral(APP_VERSION));
-
-    if (argc>1 && (!strcmp(argv[1],"-v") || !strcmp(argv[1],"--version"))) {
-        QTextStream cout(stdout, QIODevice::WriteOnly);
-        cout << "cool-retro-term " << appVersion << Qt::endl;
-        return 0;
-    }
-
-    QApplication app(argc, argv);
+    // Qt must not consume options belonging to the command after -e.
+    int guiArgc = 1;
+    char *guiArgv[] = {argv[0], nullptr};
+    QApplication app(guiArgc, guiArgv);
     app.setAttribute(Qt::AA_MacDontSwapCtrlAndMeta, true);
     app.setApplicationName(QStringLiteral("cool-retro-term"));
     app.setOrganizationName(QStringLiteral("cool-retro-term"));
@@ -115,22 +121,14 @@ int main(int argc, char *argv[])
     app.setWindowIcon(QIcon(":../icons/32x32/cool-retro-term.png"));
 #endif
 
-    // Manage command line arguments from the cpp side
-    QStringList args = app.arguments();
-
-    // Manage default command
-    QStringList cmdList;
-    if (args.contains("-e")) {
-        cmdList << args.mid(args.indexOf("-e") + 1);
-    }
-    QVariant command(cmdList.empty() ? QVariant() : cmdList[0]);
-    QVariant commandArgs(cmdList.size() <= 1 ? QVariant() : QVariant(cmdList.mid(1)));
     engine.rootContext()->setContextProperty("appVersion", appVersion);
-    engine.rootContext()->setContextProperty("defaultCmd", command);
-    engine.rootContext()->setContextProperty("defaultCmdArgs", commandArgs);
-
-    engine.rootContext()->setContextProperty("workdir", getNamedArgument(args, "--workdir", QDir::currentPath()));
+    engine.rootContext()->setContextProperty("launchOptions", launch.options.toVariantMap());
     engine.rootContext()->setContextProperty("fileIO", &fileIO);
+
+#if defined(Q_OS_MAC)
+    MacWindowHelper macWindowHelper;
+    engine.rootContext()->setContextProperty("macWindowHelper", &macWindowHelper);
+#endif
 
     // Manage import paths for Linux and OSX.
     QStringList importPathList = engine.importPathList();

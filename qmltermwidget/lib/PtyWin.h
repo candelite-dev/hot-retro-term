@@ -6,6 +6,7 @@
 #include <QByteArray>
 #include <QSize>
 #include <windows.h>
+#include <atomic>
 
 namespace Konsole {
 
@@ -47,7 +48,7 @@ private slots:
 
 private:
     bool openPseudoConsole();
-    void installCreateProcessModifier();
+    bool installCreateProcessModifier();
     void addEnvironmentVariables(const QStringList &environment);
 
     HPCON m_hPC = nullptr;
@@ -59,6 +60,7 @@ private:
     ConPtyReaderThread *m_reader = nullptr;
     QThread *m_writerThread = nullptr;
     ConPtyWriter *m_writer = nullptr;
+    std::atomic<DWORD> m_writerThreadId {0};
     int _windowColumns = 0;
     int _windowLines = 0;
     char _eraseChar = 0;

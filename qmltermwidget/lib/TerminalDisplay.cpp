@@ -2034,10 +2034,7 @@ void TerminalDisplay::updateCursor()
 {
   QRect cursorRect = imageToWidget( QRect(cursorPosition(),QSize(1,1)) );
 #if defined(Q_OS_WIN)
-  // On the D3D11 RHI a partial update(rect) of this QQuickPaintedItem does not
-  // re-trigger the CRT ShaderEffectSource capture, so the cursor blink would be
-  // invisible through the CRT chain. A full update() does re-capture (same path
-  // as content updates), so repaint fully on Windows.
+  // Full repaint makes D3D11 recapture cursor blinking through the CRT chain.
   Q_UNUSED(cursorRect);
   update();
 #else

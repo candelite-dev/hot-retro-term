@@ -85,8 +85,7 @@ Session::Session(QObject* parent) :
     //create teletype for I/O with shell process
     _shellProcess = new Pty();
 #ifdef Q_OS_WIN
-    ptySlaveFd = -1;   // Windows has no slave fd. getPtySlaveFd() is only used by
-                       // qtermwidget.cpp, which is not part of the QML build.
+    ptySlaveFd = -1;
 #else
     ptySlaveFd = _shellProcess->pty()->slaveFd();
 #endif
@@ -547,8 +546,7 @@ bool Session::sendSignal(int signal)
 {
 #ifdef Q_OS_WIN
     Q_UNUSED(signal);
-    if (processId() <= 0)
-        return false;
+    if (processId() <= 0) return false;
     _shellProcess->kill();
     return _shellProcess->waitForFinished(1000);
 #else
@@ -576,17 +574,15 @@ void Session::close()
     _wantedClose = true;
 
 #ifdef Q_OS_WIN
-    if (_shellProcess->state() == QProcess::Running) {
+    if (_shellProcess->state() != QProcess::NotRunning) {
         _shellProcess->kill();
         if (!_shellProcess->waitForFinished(1000))
             QTimer::singleShot(1, this, SIGNAL(finished()));
-        _shellProcess->closePty();
     } else {
         QTimer::singleShot(1, this, SIGNAL(finished()));
     }
-    return;
+    _shellProcess->closePty();
 #else
-
     if (isRunning())
     {
 #if defined(Q_OS_MAC)
@@ -635,10 +631,12 @@ void Session::sendKeyEvent(QKeyEvent* e) const
 
 Session::~Session()
 {
+    // Shutdown can drain process output or emit finished synchronously. Stop
+    // deliveries before destroying the decoder and terminate the PTY first.
+    disconnect(_shellProcess, nullptr, this, nullptr);
     close();
-    delete _emulation;
     delete _shellProcess;
-//  delete _zmodemProc;
+    delete _emulation;
 }
 
 void Session::setProfileKey(const QString & key)

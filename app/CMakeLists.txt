@@ -1,9 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
 
-find_package(Qt6 REQUIRED COMPONENTS
-    Core Qml Quick Widgets Sql QuickControls2 ShaderTools
-)
-
 # --- App version from git ---
 execute_process(
     COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR}/.. describe --tags --always --dirty=-dirty
@@ -23,6 +19,8 @@ set_source_files_properties(qml/resources.qrc PROPERTIES
 # --- Executable ---
 qt_add_executable(cool-retro-term
     main.cpp
+    launchoptions.cpp
+    launchoptions.h
     fileio.cpp
     fontmanager.cpp
     fontlistmodel.cpp
@@ -58,11 +56,11 @@ if(APPLE)
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_ICON_FILE crt.icns
     )
-    target_sources(cool-retro-term PRIVATE icons/crt.icns)
+    target_sources(cool-retro-term PRIVATE icons/crt.icns macwindow.mm macwindow.h)
     set_source_files_properties(icons/crt.icns PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources"
     )
-    target_link_libraries(cool-retro-term PRIVATE "-framework CoreFoundation")
+    target_link_libraries(cool-retro-term PRIVATE "-framework CoreFoundation" "-framework AppKit")
 endif()
 
 if(WIN32)
@@ -72,14 +70,17 @@ if(WIN32)
 
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/../../../bin")
     add_custom_target(deploy_windows
-        COMMAND ${WINDEPLOYQT_EXECUTABLE} --release
-                --qmldir ${CMAKE_CURRENT_SOURCE_DIR}/qml
-                --qmldir ${CMAKE_SOURCE_DIR}/qmltermwidget/src
-                $<TARGET_FILE:cool-retro-term>
-        COMMAND ${WINDEPLOYQT_EXECUTABLE} --release --no-translations
-                --dir ${CMAKE_BINARY_DIR}
-                ${CMAKE_BINARY_DIR}/qmltermwidget/QMLTermWidget/qmltermwidget.dll
-        COMMENT "windeployqt: staging Qt runtime next to the exe")
+        COMMAND "${CMAKE_COMMAND}"
+            "-DAPP_BINARY=$<TARGET_FILE:cool-retro-term>"
+            "-DPLUGIN_BINARY=$<TARGET_FILE:qmltermwidget>"
+            "-DWINDEPLOYQT=${WINDEPLOYQT_EXECUTABLE}"
+            "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
+            "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DCONFIG=$<CONFIG>"
+            -P "${CMAKE_SOURCE_DIR}/cmake/DeployWindows.cmake"
+        DEPENDS cool-retro-term qmltermwidget
+        VERBATIM
+        COMMENT "Stage the application, QML plugin and Qt runtime")
 endif()
 
 # QMLTermWidget is loaded at runtime via QML import path, not linked.

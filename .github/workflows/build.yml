@@ -3,9 +3,12 @@ name: Build
 on:
   pull_request:
   push:
-    branches: [master, feature, windows-port]
+    branches: [master, feature]
 
 jobs:
+  build-windows:
+    uses: ./.github/workflows/windows.yml
+
   build-ubuntu:
     name: Ubuntu ${{ matrix.ubuntu }}
     runs-on: ubuntu-${{ matrix.ubuntu }}
@@ -20,7 +23,7 @@ jobs:
           submodules: recursive
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@v3
         with:
           version: '6.10.*'
           modules: 'qt5compat qtshadertools'
@@ -47,6 +50,9 @@ jobs:
       - name: Build
         run: cmake --build build --parallel $(nproc)
 
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
   build-macos:
     name: macOS
     runs-on: macos-latest
@@ -57,7 +63,7 @@ jobs:
           submodules: recursive
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@v3
         with:
           version: '6.10.*'
           modules: 'qt5compat qtshadertools'
@@ -72,50 +78,5 @@ jobs:
       - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)
 
-  build-windows:
-    name: Windows (MSVC)
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.10.*'
-          arch: win64_msvc2022_64
-          modules: 'qt5compat qtshadertools'
-          cache: true
-
-      - uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
-
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Check outputs exist
-        shell: pwsh
-        run: |
-          if (!(Test-Path build\cool-retro-term.exe)) { throw "exe missing" }
-          if (!(Test-Path build\qmltermwidget\QMLTermWidget\qmltermwidget.dll)) { throw "plugin dll missing" }
-
-      - name: Deploy Qt runtime
-        run: cmake --build build --target deploy_windows
-
-      - name: Smoke test - launch and stay alive
-        shell: pwsh
-        run: |
-          $p = Start-Process build\cool-retro-term.exe -PassThru
-          Start-Sleep -Seconds 15
-          if ($p.HasExited) { throw "exited early with code $($p.ExitCode)" }
-          Stop-Process -Id $p.Id -Force
-
-      - name: Upload staged build
-        uses: actions/upload-artifact@v4
-        with:
-          name: cool-retro-term-windows-staging
-          path: build/
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

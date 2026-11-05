@@ -23,17 +23,17 @@
 
 // Qt
 #include <QColor>
-#include <QPalette>
 #include <QPointer>
 #include <QQuickPaintedItem>
 #include <QString>
 #include <QObject>
 #include <QSize>
-#include <QWidget>
 
 // Konsole
 #include "Filter.h"
 #include "Character.h"
+#include <QPalette>
+#include <QWidget>
 #include "Emulation.h"
 #include "qtermwidget_interface.h"
 //#include "konsole_export.h"
@@ -973,7 +973,7 @@ private:
     QFont m_font;
     QPalette m_palette;
     QPalette::ColorRole m_color_role;
-    KSession *m_session;
+    KSession *m_session = nullptr;
     bool m_full_cursor_height;
 
     QFont font() const { return m_font; }

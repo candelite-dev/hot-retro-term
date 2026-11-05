@@ -84,44 +84,11 @@ jobs:
           path: ./release/*
 
   build-windows:
-    name: Build (Windows, ZIP)
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.10.*'
-          arch: win64_msvc2022_64
-          modules: 'qt5compat qtshadertools'
-          cache: true
-
-      - uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
-
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Deploy Qt runtime
-        run: cmake --build build --target deploy_windows
-
-      - name: Package
-        shell: pwsh
-        run: ./scripts/package-windows.ps1
-
-      - name: Upload release asset
-        uses: actions/upload-artifact@v4
-        with:
-          name: cool-retro-term-win64
-          path: ./cool-retro-term-win64.zip
+    uses: ./.github/workflows/windows.yml
 
   release:
+    # Manual runs validate artifacts only. Publishing remains a push/tag operation.
+    if: github.event_name == 'push'
     name: Create Release
     runs-on: ubuntu-22.04
     needs:

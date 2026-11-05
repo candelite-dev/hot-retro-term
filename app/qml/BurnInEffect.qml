@@ -71,6 +71,9 @@ Loader {
 
             sourceItem: burnInShaderEffect
             live: false
+            // This shader samples its own previous output, including during
+            // resize and font zoom. Keep a separate feedback texture so it
+            // never samples the render target currently being written.
             recursive: true
             hideSource: true
             wrapMode: ShaderEffectSource.ClampToEdge

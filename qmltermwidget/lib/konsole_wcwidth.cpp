@@ -16,6 +16,7 @@
 #endif
 
 #include "konsole_wcwidth.h"
+#include <QtGlobal>
 
 #if defined(Q_OS_WIN) && !defined(HAVE_UTF8PROC)
 namespace {

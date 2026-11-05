@@ -46,10 +46,15 @@ Item {
     property size virtualResolution
     property size screenResolution
 
-    property real _screenDensity: Math.min(
+    property real _screenDensity: virtualResolution.width > 0 && virtualResolution.height > 0 ? Math.min(
         screenResolution.width / virtualResolution.width,
         screenResolution.height / virtualResolution.height
-    )
+    ) : 0
+
+    // Two output pixels per terminal pixel can resolve the raster mask. Fading
+    // from 2 to 4 hid selected scanlines at normal text sizes (e.g. 16px VGA at
+    // 65% on Retina). Fade only while approaching a single output pixel.
+    readonly property real rasterizationIntensity: Utils.smoothstep(1.0, 2.0, _screenDensity)
 
     // In unified-CRT mode (splitActive) the window-level unifiedCRT replaces
     // this whole chain; unloading it releases the per-pane FBOs (frameBuffer,
@@ -93,9 +98,7 @@ Item {
 
                 property size virtualResolution: shaderRoot.virtualResolution
 
-                // Rasterization might display oversamping issues if virtual resolution is close to physical display resolution.
-                // We progressively disable rasterization from 4x up to 2x resolution.
-                property real rasterizationIntensity: Utils.smoothstep(2.0, 4.0, shaderRoot._screenDensity)
+                property real rasterizationIntensity: shaderRoot.rasterizationIntensity
 
                 property real time: timeManager ? timeManager.time : 0
                 property ShaderEffectSource noiseSource: noiseShaderSource
@@ -104,6 +107,7 @@ Item {
                 property real frameShininess: appSettings.frameShininess
                 property real frameActive: terminalFrameLoader.active ? 1.0 : 0.0
                 property real bloom: shaderRoot.bloomSource ? appSettings.bloom * 2.5 : 0
+                property real windowAlpha: appSettings.windowOpacity
 
                 anchors.fill: parent
                 blending: false

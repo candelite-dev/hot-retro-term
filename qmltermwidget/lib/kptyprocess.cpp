@@ -85,10 +85,17 @@ KPtyProcess::~KPtyProcess()
 {
     Q_D(KPtyProcess);
 
-    if (state() != QProcess::NotRunning && d->addUtmp)
-    {
-        d->pty->logout();
-        disconnect(this, &QProcess::stateChanged, this, nullptr);
+    // QProcess can emit stateChanged while its base destructor kills a running
+    // child. Our private data has already been destroyed at that point.
+    disconnect(this, &QProcess::stateChanged, this, nullptr);
+    if (state() != QProcess::NotRunning) {
+        if (d->addUtmp)
+            d->pty->logout();
+        // Also handles a process still in Starting, whose PID Session::close()
+        // may not have seen yet. Reap it while the PTY state is still alive.
+        d->pty->close();
+        kill();
+        waitForFinished(1000);
     }
 }
 

@@ -1,0 +1,43 @@
+name: Windows package validation
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    name: Windows x64 (MSVC 2022)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.*'
+          arch: win64_msvc2022_64
+          modules: 'qt5compat qtshadertools'
+          cache: true
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Configure
+        run: cmake --preset windows-msvc
+      - name: Regenerate shaders
+        run: cmake --build --preset windows-msvc --target compile_shaders
+      - name: Build
+        run: cmake --build --preset windows-msvc --parallel
+      - name: Test
+        run: ctest --preset windows-msvc
+      - name: Deploy Qt runtime
+        run: cmake --build --preset windows-msvc --target deploy_windows
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+      - name: Test extracted ZIP without Qt SDK paths
+        shell: pwsh
+        run: ./scripts/test-windows-package.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cool-retro-term-win64
+          path: cool-retro-term-win64.zip

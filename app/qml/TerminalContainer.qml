@@ -26,6 +26,7 @@ ShaderTerminal {
     property alias title: terminal.title
     property alias terminalSize: terminal.terminalSize
     property alias mainTerminal: terminal.mainTerminal
+    readonly property real screenScaling: terminal.screenScaling
     property bool isActive: false
     signal sessionFinished()
     signal paneClicked()
@@ -38,14 +39,16 @@ ShaderTerminal {
     property bool loadBloomEffect: (appSettings.bloom > 0 || appSettings._frameShininess > 0) && !splitActive
 
     id: mainShader
-    opacity: splitActive ? 1.0 : (appSettings.windowOpacity * 0.3 + 0.7)
 
+    // windowOpacity now drives real per-pixel window alpha (see
+    // terminal_dynamic.frag's windowAlpha uniform) instead of fading
+    // this item toward the opaque window background.
     source: terminal.mainSource
     burnInEffect: terminal.burnInEffect
     virtualResolution: terminal.virtualResolution
     screenResolution: Qt.size(
-        terminalWindow.width * Screen.devicePixelRatio * appSettings.windowScaling,
-        terminalWindow.height * Screen.devicePixelRatio * appSettings.windowScaling
+        mainShader.width * Screen.devicePixelRatio * appSettings.windowScaling,
+        mainShader.height * Screen.devicePixelRatio * appSettings.windowScaling
     )
     bloomSource: bloomSourceLoader.item
 
@@ -68,19 +71,7 @@ ShaderTerminal {
 
     function refresh() {
         terminal.mainTerminal.update()
-        var src = terminal.mainSource
-        src.live = false
-        src.scheduleUpdate()
-        src.live = true
-
-        // // Force kterminal geometryChange so the PTY rows/cols sync to the new pane size.
-        // // 0 → bound value guarantees newGeometry != oldGeometry inside TerminalDisplay.
-        // var kt = terminal.mainTerminal
-        // var savedW = kt.width, savedH = kt.height
-        // kt.width = 0
-        // kt.height = 0
-        // kt.width = savedW
-        // kt.height = savedH
+        terminal.mainSource.scheduleUpdate()
     }
 
     //  EFFECTS  ////////////////////////////////////////////////////////////////

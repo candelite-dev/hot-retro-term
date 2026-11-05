@@ -64,6 +64,7 @@ build
 
 .idea/
 
-# Tool caches/configs (JetBrains junie, Codex CLI)
-.cache/
-.codex/
+# Local agent and IDE indexes
+/.codex/
+/.cache/
+/.worktrees/
