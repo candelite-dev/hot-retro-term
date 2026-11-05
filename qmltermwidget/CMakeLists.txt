@@ -61,6 +61,10 @@ set_target_properties(qmltermwidget PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qmltermwidget/QMLTermWidget"
 )
 
+# Refresh the copied layouts on incremental builds after a keytab-only edit.
+file(GLOB_RECURSE KEYBOARD_LAYOUT_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/lib/kb-layouts/*.keytab")
+set_property(TARGET qmltermwidget APPEND PROPERTY LINK_DEPENDS ${KEYBOARD_LAYOUT_FILES})
+
 # Copy plugin assets alongside the .dylib/.so
 add_custom_command(TARGET qmltermwidget POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

@@ -43,6 +43,11 @@ In split or multi-tab mode, all panes are composited under a single CRT shader p
 | Command palette | Ctrl+Shift+P |
 | Zoom in / out | Ctrl++ / Ctrl+- |
 
+Terminal input uses DEL (`0x7f`) for Backspace and Shift+Backspace, and BS (`0x08`,
+Ctrl+H) for Ctrl+Backspace. This matches Ghostty's default legacy key encoding.
+The shell's erase character follows the Backspace mapping. On macOS, Ctrl here
+means the physical Control key.
+
 ## Build and run
 
 Start in the **hot-retro-term root**, one level above `qmltermwidget`.

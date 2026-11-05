@@ -36,6 +36,16 @@ target_include_directories(hrt_launchoptions_test PRIVATE ../app)
 target_link_libraries(hrt_launchoptions_test PRIVATE Qt6::Test)
 add_test(NAME launch_options COMMAND hrt_launchoptions_test)
 
+qt_add_executable(hrt_terminal_input_test terminal_input.cpp)
+target_link_libraries(hrt_terminal_input_test PRIVATE Qt6::Test Qt6::Widgets Qt6::Quick)
+target_compile_definitions(hrt_terminal_input_test PRIVATE TEST_PLUGIN_PATH="${CMAKE_BINARY_DIR}/qmltermwidget")
+add_dependencies(hrt_terminal_input_test qmltermwidget)
+add_test(NAME terminal_input COMMAND hrt_terminal_input_test)
+set_tests_properties(terminal_input PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QML_DISABLE_DISK_CACHE=1"
+    TIMEOUT 30
+)
+
 # These must work without initializing a graphical platform, even when flags precede them.
 add_test(NAME cli_help COMMAND $<TARGET_FILE:cool-retro-term> --verbose --help)
 add_test(NAME cli_version COMMAND $<TARGET_FILE:cool-retro-term> --verbose --version)

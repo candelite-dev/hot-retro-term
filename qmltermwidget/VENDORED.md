@@ -29,3 +29,15 @@ part of this snapshot and need separate compatibility review.
 
 The startup integration tests exercise real shells, tab/split destruction, and
 process teardown without manual thread-pool drains.
+
+## Default Backspace compatibility
+
+The active `lib/kb-layouts/default.keytab` sends DEL (`0x7f`) for Backspace and
+BS (`0x08`, Ctrl+H) for Ctrl+Backspace, matching Ghostty's default legacy encoding.
+The legacy `lib/default.keytab` uses the same mapping. `Session` already initializes
+the PTY erase character from the active layout, so canonical shell editing stays
+in sync with the new default. Other named layouts retain their own mappings.
+
+Keytab files are link dependencies so an incremental CMake build also refreshes
+the plugin's copied layouts after a layout-only edit. The terminal input tests
+check bytes received by a raw child PTY and deletion in canonical shell input.
