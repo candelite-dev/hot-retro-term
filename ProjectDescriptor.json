@@ -1,0 +1,6 @@
+{
+  "status": "active",
+  "stacks": ["QML", "C++"],
+  "features": ["terminal", "CRT emulation", "tabs", "split screen"],
+  "description": "A fork of cool-retro-term with more features, like tabs, split screen and transparency for actual use. With limited support of Windows."
+}
